@@ -432,8 +432,8 @@ def get_bhava_chart(bhava_madhya_method=None, **params):
         house_num, cusps, planet_ids = entry[0], entry[1], entry[2]
         cusp_start, cusp_mid, cusp_end = cusps
         houses.append({
-            "house": int(house_num),
-            "sign": _safe_name(SIGN_NAMES, int(house_num) - 1, "Sign") if isinstance(house_num, int) else None,
+            "house": int(house_num) + 1,
+            "sign": _safe_name(SIGN_NAMES, int(house_num), "Sign") if isinstance(house_num, int) else None,
             "cusp_start": round(float(cusp_start), 4),
             "cusp_mid": round(float(cusp_mid), 4),
             "cusp_end": round(float(cusp_end), 4),
