@@ -253,31 +253,43 @@ def generate_north_indian_chart(chart_data, title="Rasi Chart", size=600,
     # Fixed sign layout: position 1=Aries (bottom-center), anti-clockwise to 12=Pisces.
     # sign_number in chart_data is 1-based (1=Aries), matching the polygon key directly.
 
-    # Find Lagna sign to determine the starting sign for House 1
-    lagna_sign = 1
+    # Determine the reference planet for House 1 (Lagna/Ascendant)
+    # For Moon Chart, we use Moon as the reference. For Sun Chart, we use Sun.
+    ref_name = "Lagna"
+    if title and "Moon" in title:
+        ref_name = "Moon"
+    elif title and "Sun" in title:
+        ref_name = "Sun"
+
+    # Find the starting sign for House 1
+    start_sign = 1
     for entry in chart_data:
-        if entry.get("planet") == "Lagna" or entry.get("planet_id") == "L":
-            lagna_sign = int(entry["sign_number"])
+        p_name = entry.get("planet", "").lower()
+        p_id = str(entry.get("planet_id", "")).lower()
+        if p_name == ref_name.lower() or p_id == ref_name[0].lower() or (ref_name == "Lagna" and (p_name == "as" or p_id == "l")):
+            start_sign = int(entry["sign_number"])
             break
 
     # Group planets by House (1-12)
-    # House 1 always gets planets in lagna_sign, House 2 gets lagna_sign + 1, etc.
     house_planets = {h: [] for h in range(1, 13)}
     for entry in chart_data:
         sign_num = int(entry["sign_number"])
-        # Calculate house number (1-based)
-        h = (sign_num - lagna_sign) % 12 + 1
+        h = (sign_num - start_sign) % 12 + 1
         
-        if entry.get("planet") == "Lagna" or entry.get("planet_id") == "L":
+        p_name = entry.get("planet", "")
+        p_id = str(entry.get("planet_id", ""))
+        if p_name.lower() == ref_name.lower() or p_id.lower() == ref_name[0].lower():
+            # Label the reference planet as "La" (or its abbr) in House 1
+            abbr = "La" if ref_name == "Lagna" else PLANET_ABBR.get(ref_name, ref_name[:2])
             deg = float(entry.get("degrees", 0))
-            house_planets[h].insert(0, ("La", deg))
+            house_planets[h].insert(0, (abbr, deg))
         else:
-            abbr = PLANET_ABBR.get(entry["planet"], entry["planet"][:2])
+            abbr = PLANET_ABBR.get(p_name, p_name[:2])
             deg  = float(entry.get("degrees", 0))
             house_planets[h].append((abbr, deg))
 
-    # Determine which Sign Number (Rashi) to display in each house corner
-    house_sign_num = {h: (lagna_sign - 1 + h - 1) % 12 + 1 for h in range(1, 13)}
+    # Sign Number (Rashi) to display in each house corner
+    house_sign_num = {h: (start_sign - 1 + h - 1) % 12 + 1 for h in range(1, 13)}
 
     # --- Draw chart border + lines ---
     draw.rectangle([ox, oy, ox + S, oy + S], outline=GOLD, width=3)
