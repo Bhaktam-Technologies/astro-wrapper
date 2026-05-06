@@ -226,47 +226,58 @@ def generate_north_indian_chart(chart_data, title="Rasi Chart", size=600,
     P1 = pt(.25, .25); P2 = pt(.75, .25)
     P3 = pt(.75, .75); P4 = pt(.25, .75)
 
-    # H1 = bottom-center diamond; houses go anti-clockwise
+    # Standard North Indian houses: H1=Top, H4=Left, H7=Bottom, H10=Right
+    # house_polys[h] connects vertices for House h
     house_polys = {
-        1:  [C, P3, B, P4],
-        2:  [BR, P3, B],
-        3:  [BR, R, P3],
-        4:  [C, P2, R, P3],
-        5:  [TR, P2, R],
-        6:  [TR, T, P2],
-        7:  [C, P1, T, P2],
-        8:  [TL, T, P1],
-        9:  [TL, P1, L],
-        10: [C, P4, L, P1],
-        11: [BL, P4, L],
-        12: [BL, B, P4],
+        1:  [C, P1, T, P2],   # Top
+        2:  [TL, T, P1],
+        3:  [TL, P1, L],
+        4:  [C, P4, L, P1],   # Left
+        5:  [BL, P4, L],
+        6:  [BL, B, P4],
+        7:  [C, P3, B, P4],   # Bottom
+        8:  [BR, P3, B],
+        9:  [BR, R, P3],
+        10: [C, P2, R, P3],   # Right
+        11: [TR, P2, R],
+        12: [TR, T, P2],
     }
 
-    # Outer vertex for each house: used to push the house-number label
-    # toward the outer wall (away from center C)
+    # Outer vertex for each house: used to push labels towards the outer wall
     house_outer = {
-        1: B,  2: BR, 3: R,  4: R,
-        5: TR, 6: T,  7: T,  8: TL,
-        9: L,  10: L, 11: BL, 12: B,
+        1: T,  2: TL, 3: L,  4: L,
+        5: BL, 6: B,  7: B,  8: BR,
+        9: R,  10: R, 11: TR, 12: T,
     }
 
     # Fixed sign layout: position 1=Aries (bottom-center), anti-clockwise to 12=Pisces.
     # sign_number in chart_data is 1-based (1=Aries), matching the polygon key directly.
 
-    # Group planets by sign position (1-based sign number = polygon key)
-    house_planets = {h: [] for h in range(1, 13)}
+    # Find Lagna sign to determine the starting sign for House 1
     lagna_sign = 1
-    lagna_deg  = 0.0
     for entry in chart_data:
-        sign_num = int(entry["sign_number"])   # 1-based, equals polygon key
         if entry.get("planet") == "Lagna" or entry.get("planet_id") == "L":
-            lagna_sign = sign_num
-            lagna_deg  = float(entry.get("degrees", 0))
-            house_planets[sign_num].insert(0, ("La", lagna_deg))
+            lagna_sign = int(entry["sign_number"])
+            break
+
+    # Group planets by House (1-12)
+    # House 1 always gets planets in lagna_sign, House 2 gets lagna_sign + 1, etc.
+    house_planets = {h: [] for h in range(1, 13)}
+    for entry in chart_data:
+        sign_num = int(entry["sign_number"])
+        # Calculate house number (1-based)
+        h = (sign_num - lagna_sign) % 12 + 1
+        
+        if entry.get("planet") == "Lagna" or entry.get("planet_id") == "L":
+            deg = float(entry.get("degrees", 0))
+            house_planets[h].insert(0, ("La", deg))
         else:
             abbr = PLANET_ABBR.get(entry["planet"], entry["planet"][:2])
             deg  = float(entry.get("degrees", 0))
-            house_planets[sign_num].append((abbr, deg))
+            house_planets[h].append((abbr, deg))
+
+    # Determine which Sign Number (Rashi) to display in each house corner
+    house_sign_num = {h: (lagna_sign - 1 + h - 1) % 12 + 1 for h in range(1, 13)}
 
     # --- Draw chart border + lines ---
     draw.rectangle([ox, oy, ox + S, oy + S], outline=GOLD, width=3)
@@ -282,22 +293,22 @@ def generate_north_indian_chart(chart_data, title="Rasi Chart", size=600,
         cx_c, cy_c = _centroid(pts)
         outer = house_outer[h]
 
-        # House number: placed 38% of the way from centroid to the outer vertex
+        # Sign Number (Rashi): placed 38% of the way from centroid to the outer vertex
         nx = cx_c + (outer[0] - cx_c) * 0.38
         ny = cy_c + (outer[1] - cy_c) * 0.38
-        num_str = str(h)
-        nbbox = draw.textbbox((0, 0), num_str, font=num_font)
-        nw = nbbox[2] - nbbox[0]
-        nh = nbbox[3] - nbbox[1]
-        draw.text((nx - nw / 2, ny - nh / 2), num_str, fill=GOLD, font=num_font)
+        sign_str = str(house_sign_num[h])
+        nbbox = draw.textbbox((0, 0), sign_str, font=num_font)
+        nw, nh = nbbox[2]-nbbox[0], nbbox[3]-nbbox[1]
+        draw.text((nx - nw / 2, ny - nh / 2), sign_str, fill=GOLD, font=num_font)
 
         # Planets: stacked or gridded at inner position
         planets = house_planets[h]
         if not planets:
             continue
 
-        line_h = 11   # deg line height
-        name_h = 13   # name line height
+        show_degrees = label_mode != "none"
+        line_h = 11 if show_degrees else 0
+        name_h = 13
         spacing = 2
         
         # Shift planets AWAY from the center (C) and towards the outer boundary
@@ -318,18 +329,22 @@ def generate_north_indian_chart(chart_data, title="Rasi Chart", size=600,
                 tx = inner_x - 15 if col == 0 else inner_x + 15
                 ty = inner_y - block_h / 2 + row * (line_h + name_h + spacing)
                 
-                deg_str = f"{int(round(deg)):02d}"
-                dbbox = draw.textbbox((0, 0), deg_str, font=deg_font)
-                draw.text((tx - (dbbox[2]-dbbox[0])/2, ty), deg_str, fill=GOLD, font=deg_font)
+                if show_degrees:
+                    deg_str = f"{int(round(deg)):02d}"
+                    dbbox = draw.textbbox((0, 0), deg_str, font=deg_font)
+                    draw.text((tx - (dbbox[2]-dbbox[0])/2, ty), deg_str, fill=GOLD, font=deg_font)
+                
                 pbbox = draw.textbbox((0, 0), abbr, font=planet_font)
                 draw.text((tx - (pbbox[2]-pbbox[0])/2, ty + line_h), abbr, fill=WHITE, font=planet_font)
         else:
             block_h = len(planets) * (line_h + name_h + spacing)
             ty = inner_y - block_h / 2
             for abbr, deg in planets:
-                deg_str = f"{int(round(deg)):02d}"
-                dbbox = draw.textbbox((0, 0), deg_str, font=deg_font)
-                draw.text((inner_x - (dbbox[2]-dbbox[0])/2, ty), deg_str, fill=GOLD, font=deg_font)
+                if show_degrees:
+                    deg_str = f"{int(round(deg)):02d}"
+                    dbbox = draw.textbbox((0, 0), deg_str, font=deg_font)
+                    draw.text((inner_x - (dbbox[2]-dbbox[0])/2, ty), deg_str, fill=GOLD, font=deg_font)
+                
                 pbbox = draw.textbbox((0, 0), abbr, font=planet_font)
                 draw.text((inner_x - (pbbox[2]-pbbox[0])/2, ty + line_h), abbr, fill=WHITE, font=planet_font)
                 ty += line_h + name_h + spacing
