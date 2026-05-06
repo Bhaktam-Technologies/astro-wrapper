@@ -182,6 +182,25 @@ def _centroid(pts):
     return sum(xs) / len(xs), sum(ys) / len(ys)
 
 
+def _safe_center(pts):
+    """Return the best interior point for text placement.
+
+    For triangles: uses the incenter (maximises min-distance to all sides),
+    which guarantees text placed here is as far from every boundary as possible.
+    For quadrilaterals: centroid is already well-interior.
+    """
+    if len(pts) == 3:
+        (ax, ay), (bx, by), (cx, cy) = pts
+        a = ((bx - cx) ** 2 + (by - cy) ** 2) ** 0.5  # side opposite A
+        b = ((ax - cx) ** 2 + (ay - cy) ** 2) ** 0.5  # side opposite B
+        c = ((ax - bx) ** 2 + (ay - by) ** 2) ** 0.5  # side opposite C
+        perim = a + b + c
+        if perim == 0:
+            return _centroid(pts)
+        return (a * ax + b * bx + c * cx) / perim, (a * ay + b * by + c * cy) / perim
+    return _centroid(pts)
+
+
 def generate_north_indian_chart(chart_data, title="Rasi Chart", size=600,
                                 label_mode="degrees"):
     """North Indian style — SS dark theme.
@@ -291,7 +310,7 @@ def generate_north_indian_chart(chart_data, title="Rasi Chart", size=600,
             deg  = float(entry.get("degrees", 0))
             house_planets[h].append((abbr, deg))
 
-    # Sign Number (Rashi) to display in each house corner
+    # Sign number to display in each cell corner (sign that occupies each house)
     house_sign_num = {h: (start_sign - 1 + h - 1) % 12 + 1 for h in range(1, 13)}
 
     # --- Draw chart border + lines ---
@@ -316,52 +335,44 @@ def generate_north_indian_chart(chart_data, title="Rasi Chart", size=600,
         nw, nh = nbbox[2]-nbbox[0], nbbox[3]-nbbox[1]
         draw.text((nx - nw / 2, ny - nh / 2), sign_str, fill=COLOR_SIGN, font=num_font)
 
-        # Planets: stacked or gridded at inner position
+        # Planets: use incenter for triangles (deepest interior point),
+        # centroid for diamonds — guarantees text stays inside the cell.
         planets = house_planets[h]
         if not planets:
             continue
+
+        sx, sy = _safe_center(pts)
 
         show_degrees = label_mode != "none"
         line_h = 11 if show_degrees else 0
         name_h = 13
         spacing = 2
-        
-        # Shift planets AWAY from the center (C) and towards the outer boundary
-        # This keeps them away from the inner diagonal lines.
-        shift_factor = 0.18
-        inner_x = cx_c + (outer[0] - cx_c) * shift_factor
-        inner_y = cy_c + (outer[1] - cy_c) * shift_factor
 
-        # If many planets, use two columns to prevent vertical overflow
+        # Two columns when 3+ planets to avoid vertical overflow in small cells
         if len(planets) >= 3:
             col_size = (len(planets) + 1) // 2
             block_h = col_size * (line_h + name_h + spacing)
-            
             for i, (abbr, deg) in enumerate(planets):
                 col = 0 if i < col_size else 1
                 row = i if i < col_size else i - col_size
-                # Spread columns slightly
-                tx = inner_x - 15 if col == 0 else inner_x + 15
-                ty = inner_y - block_h / 2 + row * (line_h + name_h + spacing)
-                
+                tx = sx - 15 if col == 0 else sx + 15
+                ty = sy - block_h / 2 + row * (line_h + name_h + spacing)
                 if show_degrees:
                     deg_str = f"{int(round(deg)):02d}"
                     dbbox = draw.textbbox((0, 0), deg_str, font=deg_font)
                     draw.text((tx - (dbbox[2]-dbbox[0])/2, ty), deg_str, fill=COLOR_DEGREE, font=deg_font)
-                
                 pbbox = draw.textbbox((0, 0), abbr, font=planet_font)
                 draw.text((tx - (pbbox[2]-pbbox[0])/2, ty + line_h), abbr, fill=COLOR_PLANET, font=planet_font)
         else:
             block_h = len(planets) * (line_h + name_h + spacing)
-            ty = inner_y - block_h / 2
+            ty = sy - block_h / 2
             for abbr, deg in planets:
                 if show_degrees:
                     deg_str = f"{int(round(deg)):02d}"
                     dbbox = draw.textbbox((0, 0), deg_str, font=deg_font)
-                    draw.text((inner_x - (dbbox[2]-dbbox[0])/2, ty), deg_str, fill=COLOR_DEGREE, font=deg_font)
-                
+                    draw.text((sx - (dbbox[2]-dbbox[0])/2, ty), deg_str, fill=COLOR_DEGREE, font=deg_font)
                 pbbox = draw.textbbox((0, 0), abbr, font=planet_font)
-                draw.text((inner_x - (pbbox[2]-pbbox[0])/2, ty + line_h), abbr, fill=COLOR_PLANET, font=planet_font)
+                draw.text((sx - (pbbox[2]-pbbox[0])/2, ty + line_h), abbr, fill=COLOR_PLANET, font=planet_font)
                 ty += line_h + name_h + spacing
 
     buf = io.BytesIO()

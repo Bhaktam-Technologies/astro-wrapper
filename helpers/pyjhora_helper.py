@@ -274,7 +274,15 @@ def _duration_struct(start, end):
 def get_rasi_chart(**params):
     place, *_rest, jd = _build_inputs(**params)
     rc = charts.rasi_chart(jd, place)
-    return [_format_planet_position(e) for e in rc]
+    return _add_house_numbers([_format_planet_position(e) for e in rc])
+
+
+def _add_house_numbers(data):
+    """Attach house_number (1-12 from Lagna) to each planet entry in-place."""
+    lagna_sign = next((e["sign_number"] for e in data if e["planet_id"] == "L"), 1)
+    for e in data:
+        e["house_number"] = (e["sign_number"] - lagna_sign) % 12 + 1
+    return data
 
 
 def get_divisional_chart(divisional_chart_factor, chart_method=1, **params):
@@ -284,7 +292,7 @@ def get_divisional_chart(divisional_chart_factor, chart_method=1, **params):
 
     df = int(divisional_chart_factor)
     if df == 1:
-        return [_format_planet_position(e) for e in rc]
+        return _add_house_numbers([_format_planet_position(e) for e in rc])
 
     if df in DIVISIONAL_BUILDERS and DIVISIONAL_BUILDERS[df][1] is not None:
         builder = DIVISIONAL_BUILDERS[df][1]
@@ -293,7 +301,7 @@ def get_divisional_chart(divisional_chart_factor, chart_method=1, **params):
         result = charts.divisional_positions_from_rasi_positions(
             rc, divisional_chart_factor=df, chart_method=chart_method,
         )
-    return [_format_planet_position(e) for e in result]
+    return _add_house_numbers([_format_planet_position(e) for e in result])
 
 
 def get_divisional_charts(**params):
@@ -313,7 +321,7 @@ def get_divisional_charts(**params):
                     )
             else:
                 data = builder(rc, chart_method=1)
-            out[name] = [_format_planet_position(e) for e in data]
+            out[name] = _add_house_numbers([_format_planet_position(e) for e in data])
         except Exception as e:
             out[name] = {"error": str(e)}
     return out
@@ -331,7 +339,7 @@ def get_custom_divisional_chart(divisional_chart_factor, chart_method=0,
         rc, divisional_chart_factor=df, chart_method=chart_method,
         base_rasi=base_rasi, count_from_end_of_sign=bool(count_from_end_of_sign),
     )
-    return [_format_planet_position(e) for e in result]
+    return _add_house_numbers([_format_planet_position(e) for e in result])
 
 
 def get_mixed_chart(varga_factor_1, varga_factor_2,
@@ -342,7 +350,7 @@ def get_mixed_chart(varga_factor_1, varga_factor_2,
         varga_factor_1=int(varga_factor_1), chart_method_1=int(chart_method_1),
         varga_factor_2=int(varga_factor_2), chart_method_2=int(chart_method_2),
     )
-    return [_format_planet_position(e) for e in result]
+    return _add_house_numbers([_format_planet_position(e) for e in result])
 
 
 def get_moon_data(**params):
@@ -369,6 +377,7 @@ def get_moon_data(**params):
     moonrise_hours = float(mr[0]) if mr else None
     moonset_hours = float(ms[0]) if ms else None
 
+    moon_sign = sign_idx + 1   # Moon sign is the lagna for Moon chart
     planets = []
     for entry in rc:
         label = entry[0]
@@ -379,11 +388,13 @@ def get_moon_data(**params):
             s_idx = int(sign_data[0])
         else:
             s_idx = int(sign_data)
+        sn = s_idx + 1
         planets.append({
             "planet": PLANET_NAMES.get(label, str(label)),
             "planet_id": label,
             "sign": _safe_name(SIGN_NAMES, s_idx, "Sign"),
-            "sign_number": s_idx + 1,
+            "sign_number": sn,
+            "house_number": (sn - moon_sign) % 12 + 1,
         })
 
     return {
