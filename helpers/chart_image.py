@@ -196,21 +196,24 @@ def generate_north_indian_chart(chart_data, title="Rasi Chart", size=600,
     img_w = size
     img_h = size + title_height
 
-    BG   = (10, 10, 10)
-    GOLD = (255, 165, 0)
-    WHITE = (255, 255, 255)
+    BG           = (255, 255, 255) # White background
+    COLOR_LINE   = (255, 180, 0)   # Yellow lines
+    COLOR_SIGN   = (255, 0, 0)     # Red sign numbers
+    COLOR_PLANET = (0, 0, 139)     # DarkBlue planets
+    COLOR_DEGREE = (0, 0, 0)       # Black degrees
+    COLOR_TITLE  = (0, 0, 0)       # Black title
 
     img = Image.new("RGB", (img_w, img_h), BG)
     draw = ImageDraw.Draw(img)
 
-    title_font  = _try_load_font(17)
-    num_font    = _try_load_font(15)
-    deg_font    = _try_load_font(9)
-    planet_font = _try_load_font(12)
+    title_font  = _try_load_font(18)
+    num_font    = _try_load_font(14)
+    deg_font    = _try_load_font(11)
+    planet_font = _try_load_font(13)
 
     bbox = draw.textbbox((0, 0), title, font=title_font)
     tw = bbox[2] - bbox[0]
-    draw.text(((img_w - tw) // 2, 8), title, fill=GOLD, font=title_font)
+    draw.text(((img_w - tw) // 2, 8), title, fill=COLOR_TITLE, font=title_font)
 
     ox = margin
     oy = margin + title_height
@@ -292,13 +295,13 @@ def generate_north_indian_chart(chart_data, title="Rasi Chart", size=600,
     house_sign_num = {h: (start_sign - 1 + h - 1) % 12 + 1 for h in range(1, 13)}
 
     # --- Draw chart border + lines ---
-    draw.rectangle([ox, oy, ox + S, oy + S], outline=GOLD, width=3)
-    draw.line([T, R], fill=GOLD, width=2)
-    draw.line([R, B], fill=GOLD, width=2)
-    draw.line([B, L], fill=GOLD, width=2)
-    draw.line([L, T], fill=GOLD, width=2)
-    draw.line([TL, BR], fill=GOLD, width=2)
-    draw.line([TR, BL], fill=GOLD, width=2)
+    draw.rectangle([ox, oy, ox + S, oy + S], outline=COLOR_LINE, width=3)
+    draw.line([T, R], fill=COLOR_LINE, width=2)
+    draw.line([R, B], fill=COLOR_LINE, width=2)
+    draw.line([B, L], fill=COLOR_LINE, width=2)
+    draw.line([L, T], fill=COLOR_LINE, width=2)
+    draw.line([TL, BR], fill=COLOR_LINE, width=2)
+    draw.line([TR, BL], fill=COLOR_LINE, width=2)
 
     # --- Render each house cell ---
     for h, pts in house_polys.items():
@@ -311,7 +314,7 @@ def generate_north_indian_chart(chart_data, title="Rasi Chart", size=600,
         sign_str = str(house_sign_num[h])
         nbbox = draw.textbbox((0, 0), sign_str, font=num_font)
         nw, nh = nbbox[2]-nbbox[0], nbbox[3]-nbbox[1]
-        draw.text((nx - nw / 2, ny - nh / 2), sign_str, fill=GOLD, font=num_font)
+        draw.text((nx - nw / 2, ny - nh / 2), sign_str, fill=COLOR_SIGN, font=num_font)
 
         # Planets: stacked or gridded at inner position
         planets = house_planets[h]
@@ -344,10 +347,10 @@ def generate_north_indian_chart(chart_data, title="Rasi Chart", size=600,
                 if show_degrees:
                     deg_str = f"{int(round(deg)):02d}"
                     dbbox = draw.textbbox((0, 0), deg_str, font=deg_font)
-                    draw.text((tx - (dbbox[2]-dbbox[0])/2, ty), deg_str, fill=GOLD, font=deg_font)
+                    draw.text((tx - (dbbox[2]-dbbox[0])/2, ty), deg_str, fill=COLOR_DEGREE, font=deg_font)
                 
                 pbbox = draw.textbbox((0, 0), abbr, font=planet_font)
-                draw.text((tx - (pbbox[2]-pbbox[0])/2, ty + line_h), abbr, fill=WHITE, font=planet_font)
+                draw.text((tx - (pbbox[2]-pbbox[0])/2, ty + line_h), abbr, fill=COLOR_PLANET, font=planet_font)
         else:
             block_h = len(planets) * (line_h + name_h + spacing)
             ty = inner_y - block_h / 2
@@ -355,10 +358,10 @@ def generate_north_indian_chart(chart_data, title="Rasi Chart", size=600,
                 if show_degrees:
                     deg_str = f"{int(round(deg)):02d}"
                     dbbox = draw.textbbox((0, 0), deg_str, font=deg_font)
-                    draw.text((inner_x - (dbbox[2]-dbbox[0])/2, ty), deg_str, fill=GOLD, font=deg_font)
+                    draw.text((inner_x - (dbbox[2]-dbbox[0])/2, ty), deg_str, fill=COLOR_DEGREE, font=deg_font)
                 
                 pbbox = draw.textbbox((0, 0), abbr, font=planet_font)
-                draw.text((inner_x - (pbbox[2]-pbbox[0])/2, ty + line_h), abbr, fill=WHITE, font=planet_font)
+                draw.text((inner_x - (pbbox[2]-pbbox[0])/2, ty + line_h), abbr, fill=COLOR_PLANET, font=planet_font)
                 ty += line_h + name_h + spacing
 
     buf = io.BytesIO()
@@ -585,8 +588,8 @@ def _bhava_north(cells, houses_list, title="Bhava / Chalit Chart", size=600,
     # This ensures lagna_h goes to polygon 1 (Top).
     
     # --- Draw chart lines ---
-    draw.rectangle([ox, oy, ox + S, oy + S], outline="black", width=2)
-    line_color = (160, 80, 0)
+    draw.rectangle([ox, oy, ox + S, oy + S], outline=(255, 180, 0), width=2)
+    line_color = (255, 180, 0) # Yellow lines
     for pair in [(T, R), (R, B), (B, L), (L, T), (TL, BR), (TR, BL)]:
         draw.line([pair[0], pair[1]], fill=line_color, width=1)
 
