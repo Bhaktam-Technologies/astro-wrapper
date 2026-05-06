@@ -184,29 +184,38 @@ def _centroid(pts):
 
 def generate_north_indian_chart(chart_data, title="Rasi Chart", size=600,
                                 label_mode="degrees"):
-    """North Indian (Uttara Bharatiya) style: houses are fixed, signs rotate."""
-    margin = 40
-    title_height = 50
-    S = size - 2 * margin        # chart square side length
+    """North Indian style — SS dark theme.
+
+    Houses are fixed (H1=bottom-center, anti-clockwise to H12).
+    Lagna sign rotates into H1. Each cell shows its house number once (gold),
+    then planets as: degree on top line, abbreviation on next line (white).
+    """
+    margin = 30
+    title_height = 44
+    S = size - 2 * margin
     img_w = size
     img_h = size + title_height
 
-    img = Image.new("RGB", (img_w, img_h), "white")
+    BG   = (10, 10, 10)
+    GOLD = (255, 165, 0)
+    WHITE = (255, 255, 255)
+
+    img = Image.new("RGB", (img_w, img_h), BG)
     draw = ImageDraw.Draw(img)
 
-    title_font  = _try_load_font(18)
-    sign_font   = _try_load_font(10)
-    planet_font = _try_load_font(10)
+    title_font  = _try_load_font(17)
+    num_font    = _try_load_font(15)
+    deg_font    = _try_load_font(9)
+    planet_font = _try_load_font(12)
 
     bbox = draw.textbbox((0, 0), title, font=title_font)
     tw = bbox[2] - bbox[0]
-    draw.text(((img_w - tw) // 2, 10), title, fill="black", font=title_font)
+    draw.text(((img_w - tw) // 2, 8), title, fill=GOLD, font=title_font)
 
     ox = margin
     oy = margin + title_height
 
-    # Named key points (integer coords)
-    def pt(rx, ry):   # rx, ry in [0,1] relative to chart square
+    def pt(rx, ry):
         return (ox + int(rx * S), oy + int(ry * S))
 
     TL = pt(0,   0);   TR = pt(1,   0)
@@ -217,7 +226,7 @@ def generate_north_indian_chart(chart_data, title="Rasi Chart", size=600,
     P1 = pt(.25, .25); P2 = pt(.75, .25)
     P3 = pt(.75, .75); P4 = pt(.25, .75)
 
-    # 12 house polygons — clockwise from H1 (bottom inner)
+    # H1 = bottom-center diamond; houses go anti-clockwise
     house_polys = {
         1:  [C, P3, B, P4],
         2:  [BR, P3, B],
@@ -233,72 +242,97 @@ def generate_north_indian_chart(chart_data, title="Rasi Chart", size=600,
         12: [BL, B, P4],
     }
 
-    # Find Lagna sign (1-based)
-    lagna_sign = 1
-    for entry in chart_data:
-        if entry.get("planet") == "Lagna" or entry.get("planet_id") == "L":
-            lagna_sign = int(entry["sign_number"])
-            break
+    # Outer vertex for each house: used to push the house-number label
+    # toward the outer wall (away from center C)
+    house_outer = {
+        1: B,  2: BR, 3: R,  4: R,
+        5: TR, 6: T,  7: T,  8: TL,
+        9: L,  10: L, 11: BL, 12: B,
+    }
 
-    # house_sign[h] = 0-based sign index for house h
-    house_sign = {h: (lagna_sign - 1 + h - 1) % 12 for h in range(1, 13)}
+    # Fixed sign layout: position 1=Aries (bottom-center), anti-clockwise to 12=Pisces.
+    # sign_number in chart_data is 1-based (1=Aries), matching the polygon key directly.
 
-    # Group planet labels by house
+    # Group planets by sign position (1-based sign number = polygon key)
     house_planets = {h: [] for h in range(1, 13)}
-    sign_to_house = {si: h for h, si in house_sign.items()}
+    lagna_sign = 1
+    lagna_deg  = 0.0
     for entry in chart_data:
-        if entry.get("planet") == "Lagna":
-            continue
-        sign_idx = int(entry["sign_number"]) - 1
-        abbr = PLANET_ABBR.get(entry["planet"], entry["planet"][:2])
-        deg  = entry.get("degrees", 0)
-        if label_mode == "sign_number":
-            label = f"{abbr} {sign_idx + 1}"
-        elif label_mode == "both":
-            label = f"{abbr} {sign_idx+1}·{deg:.0f}°"
-        elif label_mode == "none":
-            label = abbr
+        sign_num = int(entry["sign_number"])   # 1-based, equals polygon key
+        if entry.get("planet") == "Lagna" or entry.get("planet_id") == "L":
+            lagna_sign = sign_num
+            lagna_deg  = float(entry.get("degrees", 0))
+            house_planets[sign_num].insert(0, ("La", lagna_deg))
         else:
-            label = f"{abbr} {deg:.0f}°"
-        h = sign_to_house.get(sign_idx)
-        if h:
-            house_planets[h].append(label)
+            abbr = PLANET_ABBR.get(entry["planet"], entry["planet"][:2])
+            deg  = float(entry.get("degrees", 0))
+            house_planets[sign_num].append((abbr, deg))
 
-    # --- Draw chart lines ---
-    # Outer border
-    draw.rectangle([ox, oy, ox + S, oy + S], outline="black", width=2)
-    # Inner diamond sides
-    line_color = (160, 80, 0)   # dark amber, similar to AstroSage dashed lines
-    draw.line([T, R], fill=line_color, width=1)
-    draw.line([R, B], fill=line_color, width=1)
-    draw.line([B, L], fill=line_color, width=1)
-    draw.line([L, T], fill=line_color, width=1)
-    # Full diagonals (TL→BR and TR→BL)
-    draw.line([TL, BR], fill=line_color, width=1)
-    draw.line([TR, BL], fill=line_color, width=1)
+    # --- Draw chart border + lines ---
+    draw.rectangle([ox, oy, ox + S, oy + S], outline=GOLD, width=3)
+    draw.line([T, R], fill=GOLD, width=2)
+    draw.line([R, B], fill=GOLD, width=2)
+    draw.line([B, L], fill=GOLD, width=2)
+    draw.line([L, T], fill=GOLD, width=2)
+    draw.line([TL, BR], fill=GOLD, width=2)
+    draw.line([TR, BL], fill=GOLD, width=2)
 
-    # --- Fill each house cell with sign + planets ---
+    # --- Render each house cell ---
     for h, pts in house_polys.items():
-        sign_idx   = house_sign[h]
-        sign_short = SIGN_NAMES_SHORT[sign_idx]
         cx_c, cy_c = _centroid(pts)
+        outer = house_outer[h]
 
-        # Sign abbreviation (red, small)
-        sbbox = draw.textbbox((0, 0), sign_short, font=sign_font)
-        sw = sbbox[2] - sbbox[0]
-        sh = sbbox[3] - sbbox[1]
+        # House number: placed 38% of the way from centroid to the outer vertex
+        nx = cx_c + (outer[0] - cx_c) * 0.38
+        ny = cy_c + (outer[1] - cy_c) * 0.38
+        num_str = str(h)
+        nbbox = draw.textbbox((0, 0), num_str, font=num_font)
+        nw = nbbox[2] - nbbox[0]
+        nh = nbbox[3] - nbbox[1]
+        draw.text((nx - nw / 2, ny - nh / 2), num_str, fill=GOLD, font=num_font)
 
+        # Planets: stacked or gridded at inner position
         planets = house_planets[h]
-        block_h = sh + len(planets) * 13
-        top_y   = cy_c - block_h / 2
+        if not planets:
+            continue
 
-        draw.text((cx_c - sw / 2, top_y), sign_short, fill="darkred", font=sign_font)
-        py = top_y + sh + 2
-        for p_label in planets:
-            pbbox = draw.textbbox((0, 0), p_label, font=planet_font)
-            pw = pbbox[2] - pbbox[0]
-            draw.text((cx_c - pw / 2, py), p_label, fill="darkblue", font=planet_font)
-            py += 13
+        line_h = 11   # deg line height
+        name_h = 13   # name line height
+        spacing = 2
+        
+        # Shift planets AWAY from the center (C) and towards the outer boundary
+        # This keeps them away from the inner diagonal lines.
+        shift_factor = 0.18
+        inner_x = cx_c + (outer[0] - cx_c) * shift_factor
+        inner_y = cy_c + (outer[1] - cy_c) * shift_factor
+
+        # If many planets, use two columns to prevent vertical overflow
+        if len(planets) >= 3:
+            col_size = (len(planets) + 1) // 2
+            block_h = col_size * (line_h + name_h + spacing)
+            
+            for i, (abbr, deg) in enumerate(planets):
+                col = 0 if i < col_size else 1
+                row = i if i < col_size else i - col_size
+                # Spread columns slightly
+                tx = inner_x - 15 if col == 0 else inner_x + 15
+                ty = inner_y - block_h / 2 + row * (line_h + name_h + spacing)
+                
+                deg_str = f"{int(round(deg)):02d}"
+                dbbox = draw.textbbox((0, 0), deg_str, font=deg_font)
+                draw.text((tx - (dbbox[2]-dbbox[0])/2, ty), deg_str, fill=GOLD, font=deg_font)
+                pbbox = draw.textbbox((0, 0), abbr, font=planet_font)
+                draw.text((tx - (pbbox[2]-pbbox[0])/2, ty + line_h), abbr, fill=WHITE, font=planet_font)
+        else:
+            block_h = len(planets) * (line_h + name_h + spacing)
+            ty = inner_y - block_h / 2
+            for abbr, deg in planets:
+                deg_str = f"{int(round(deg)):02d}"
+                dbbox = draw.textbbox((0, 0), deg_str, font=deg_font)
+                draw.text((inner_x - (dbbox[2]-dbbox[0])/2, ty), deg_str, fill=GOLD, font=deg_font)
+                pbbox = draw.textbbox((0, 0), abbr, font=planet_font)
+                draw.text((inner_x - (pbbox[2]-pbbox[0])/2, ty + line_h), abbr, fill=WHITE, font=planet_font)
+                ty += line_h + name_h + spacing
 
     buf = io.BytesIO()
     img.save(buf, format="PNG")
