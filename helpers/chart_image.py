@@ -374,13 +374,13 @@ def generate_north_indian_chart(chart_data, title="Rasi Chart", size=600,
 def generate_bhava_chart(bhava_data, title="Bhava / Chalit Chart", size=600,
                          label_mode="house", style="north"):
     """Render a bhava (chalit) chart in North or South Indian style.
-
     bhava_data: dict with 'houses' key — list of
       {house, sign, cusp_start, cusp_mid, cusp_end, planets, planet_ids}
     label_mode:
-      * "house"      → shows "H9" + planets          (default)
-      * "cusp"       → shows "H9 · 283°" (cusp mid)
-      * "none"       → just planets, no house prefix
+      * "house"       → shows "H9" + planets          (default)
+      * "cusp"        → shows "H9 \u00b7 283\u00b0" (cusp mid)
+      * "sign_number" → shows Rashi number in corner
+      * "none"        → just planets, no house prefix
     style:
       * "north"      → North Indian diamond layout    (default)
       * "south"      → South Indian fixed-sign grid
@@ -453,13 +453,16 @@ def _bhava_south(cells, title="Bhava / Chalit Chart", size=600, label_mode="hous
         if cell["house"] is not None:
             if label_mode == "cusp" and cell["cusp_mid"] is not None:
                 hlabel = f"H{cell['house']} \u00b7 {float(cell['cusp_mid']):.0f}\u00b0"
+            elif label_mode == "sign_number":
+                hlabel = str(sign_idx + 1)
             elif label_mode == "none":
                 hlabel = ""
             else:
                 hlabel = f"H{cell['house']}"
             if hlabel:
+                color = "red" if label_mode == "sign_number" else "darkgreen"
                 draw.text((x + cell_w - 48, y + 2), hlabel,
-                          fill="darkgreen", font=house_font)
+                          fill=color, font=house_font)
 
         py = y + 20
         for p_abbr in cell["planets"]:
@@ -512,96 +515,152 @@ def _bhava_north(cells, houses_list, title="Bhava / Chalit Chart", size=600,
     P1 = pt(.25, .25); P2 = pt(.75, .25)
     P3 = pt(.75, .75); P4 = pt(.25, .75)
 
+    # Determine rotation offset: we want the house containing Lagna (or House 1) at the Top
+    # In North Indian charts, the Top Diamond is traditionally House 1.
+    # We find which h_num from the data should be in Polygon 1.
+    # Usually, House 1 is the one we want at the Top.
+    # If the API data is already house-ordered, we map h_num directly to Polygon h_num.
+    # If the user says it's "opposite", it might be because they want House 1 at the Top
+    # but the API returned a fixed Aries-based chart. 
+    # However, we'll stick to H1=Top and ensure House 1 from data goes there.
+    
+    # house_polys[h] maps house number (1-12) to polygon vertices
+    # H1=Top, H4=Left, H7=Bottom, H10=Right
     house_polys = {
-        1:  [C, P3, B, P4],
-        2:  [BR, P3, B],
-        3:  [BR, R, P3],
-        4:  [C, P2, R, P3],
-        5:  [TR, P2, R],
-        6:  [TR, T, P2],
-        7:  [C, P1, T, P2],
-        8:  [TL, T, P1],
-        9:  [TL, P1, L],
-        10: [C, P4, L, P1],
-        11: [BL, P4, L],
-        12: [BL, B, P4],
+        1:  [C, P1, T, P2],   # Top
+        2:  [TL, T, P1],
+        3:  [TL, P1, L],
+        4:  [C, P4, L, P1],   # Left
+        5:  [BL, P4, L],
+        6:  [BL, B, P4],
+        7:  [C, P3, B, P4],   # Bottom
+        8:  [BR, P3, B],
+        9:  [BR, R, P3],
+        10: [C, P2, R, P3],   # Right
+        11: [TR, P2, R],
+        12: [TR, T, P2],
+    }
+    house_outer = {
+        1: T,  2: TL, 3: L,  4: L,
+        5: BL, 6: B,  7: B,  8: BR,
+        9: R,  10: R, 11: TR, 12: T,
     }
 
-    # Determine lagna sign from bhava-1 entry
-    lagna_sign_1based = 1
-    for h in houses_list:
-        if int(h.get("house", 0)) == 1:
-            sign_name = h.get("sign", "")
-            if sign_name in SIGN_NAMES_FULL:
-                lagna_sign_1based = SIGN_NAMES_FULL.index(sign_name) + 1
+    # Build per-house data directly from the input houses_list
+    region_data = {}
+    for h_entry in houses_list:
+        h_num = int(h_entry.get("house", 0))
+        if h_num < 1 or h_num > 12: continue
+        
+        sign_name = h_entry.get("sign", "")
+        sign_idx = SIGN_NAMES_FULL.index(sign_name) if sign_name in SIGN_NAMES_FULL else 0
+        
+        planets_to_draw = []
+        is_lagna_house = False
+        for p in h_entry.get("planets", []):
+            abbr = PLANET_ABBR.get(p, p[:2])
+            if p in {"Lagna", "As", "L"}:
+                planets_to_draw.insert(0, "La")
+                is_lagna_house = True
             else:
-                cusp = float(h.get("cusp_start", 0))
-                lagna_sign_1based = int(cusp // 30) % 12 + 1
+                planets_to_draw.append(abbr)
+
+        region_data[h_num] = {
+            "sign_idx": sign_idx,
+            "house_label": h_num,
+            "planets": planets_to_draw,
+            "cusp_mid": h_entry.get("cusp_mid"),
+            "is_lagna": is_lagna_house
+        }
+
+    # Determine rotation: find which house has Lagna. 
+    # If no house has "La", we assume House 1 is the top.
+    lagna_h = 1
+    for h_num, rd in region_data.items():
+        if rd["is_lagna"]:
+            lagna_h = h_num
             break
-
-    # house_sign[h] = 0-based sign index placed in diamond region h
-    house_sign = {h: (lagna_sign_1based - 1 + h - 1) % 12 for h in range(1, 13)}
-    sign_to_region = {si: h for h, si in house_sign.items()}
-
-    # Build per-region data from cells (keyed by sign index)
-    region_data = {h: {"sign_idx": house_sign[h], "house_label": None,
-                       "planets": [], "cusp_mid": None}
-                   for h in range(1, 13)}
-    for sign_idx, cell in cells.items():
-        region = sign_to_region.get(sign_idx)
-        if region is None:
-            continue
-        rd = region_data[region]
-        rd["house_label"] = cell["house"]
-        rd["planets"] = cell["planets"]
-        rd["cusp_mid"] = cell["cusp_mid"]
-
+    
+    # rotation_offset: house h_num will be placed in polygon ((h_num - lagna_h) % 12) + 1
+    # This ensures lagna_h goes to polygon 1 (Top).
+    
     # --- Draw chart lines ---
     draw.rectangle([ox, oy, ox + S, oy + S], outline="black", width=2)
     line_color = (160, 80, 0)
-    draw.line([T, R], fill=line_color, width=1)
-    draw.line([R, B], fill=line_color, width=1)
-    draw.line([B, L], fill=line_color, width=1)
-    draw.line([L, T], fill=line_color, width=1)
-    draw.line([TL, BR], fill=line_color, width=1)
-    draw.line([TR, BL], fill=line_color, width=1)
+    for pair in [(T, R), (R, B), (B, L), (L, T), (TL, BR), (TR, BL)]:
+        draw.line([pair[0], pair[1]], fill=line_color, width=1)
 
     # --- Fill each region ---
-    for region, pts in house_polys.items():
-        rd = region_data[region]
+    # Polygon p_num (1..12) should contain House h_num
+    # where House lagna_h goes to Polygon 1.
+    # So House h_num goes to Polygon p_num = (h_num - lagna_h) % 12 + 1
+    # Conversely, Polygon p_num contains House h_num = (p_num - 1 + lagna_h - 1) % 12 + 1
+    
+    for p_num, pts in house_polys.items():
+        h_num = (p_num - 1 + lagna_h - 1) % 12 + 1
+        rd = region_data.get(h_num)
+        if not rd: continue
+        
         sign_short = SIGN_NAMES_SHORT[rd["sign_idx"]]
         cx_c, cy_c = _centroid(pts)
+        outer = house_outer[p_num]
 
-        # Build label lines: [sign, house_label, ...planets]
-        lines = []
-
-        # House label (e.g. "H3") in darkgreen
-        if rd["house_label"] is not None and label_mode != "none":
+        # House/Sign label in corner
+        if label_mode != "none":
             if label_mode == "cusp" and rd["cusp_mid"] is not None:
                 hlabel = f"H{rd['house_label']} \u00b7 {float(rd['cusp_mid']):.0f}\u00b0"
+            elif label_mode == "sign_number":
+                hlabel = str(rd["sign_idx"] + 1)
             else:
                 hlabel = f"H{rd['house_label']}"
-            lines.append(("house", hlabel))
+            
+            nx = cx_c + (outer[0] - cx_c) * 0.42
+            ny = cy_c + (outer[1] - cy_c) * 0.42
+            bb = draw.textbbox((0, 0), hlabel, font=house_font)
+            draw.text((nx - (bb[2]-bb[0])/2, ny - (bb[3]-bb[1])/2), hlabel, 
+                      fill="red" if label_mode == "sign_number" else "darkgreen", font=house_font)
 
-        # Sign abbr in darkred
-        lines.append(("sign", sign_short))
-
-        # Planets in darkblue
+        # Build list of lines to draw in the center
+        lines = []
         for p in rd["planets"]:
             lines.append(("planet", p))
 
-        total_h = len(lines) * 13
-        top_y = cy_c - total_h / 2
+        # Layout calculations
+        planet_lines = [l for l in lines if l[0] == "planet"]
+        other_lines = [l for l in lines if l[0] != "planet"]
+        planet_rows = (len(planet_lines) + 1) // 2 if len(planet_lines) > 4 else len(planet_lines)
+        total_h = (len(other_lines) + planet_rows) * 14
+        
+        shift_factor = 0.18
+        inner_x = cx_c + (outer[0] - cx_c) * shift_factor
+        inner_y = cy_c + (outer[1] - cy_c) * shift_factor
+        
+        current_y = inner_y - total_h / 2
+        color_map = {"sign": "darkred", "planet": "darkblue"}
+        font_map  = {"sign": sign_font,  "planet": planet_font}
 
-        color_map = {"house": "darkgreen", "sign": "darkred", "planet": "darkblue"}
-        font_map  = {"house": house_font,  "sign": sign_font,  "planet": planet_font}
-
-        for kind, text in lines:
+        for kind, text in other_lines:
             f = font_map[kind]
             bb = draw.textbbox((0, 0), text, font=f)
-            tw2 = bb[2] - bb[0]
-            draw.text((cx_c - tw2 / 2, top_y), text, fill=color_map[kind], font=f)
-            top_y += 13
+            draw.text((inner_x - (bb[2]-bb[0])/2, current_y), text, fill=color_map[kind], font=f)
+            current_y += 14
+
+        if len(planet_lines) > 4:
+            col_size = (len(planet_lines) + 1) // 2
+            for i, p_item in enumerate(planet_lines):
+                p_text = p_item[1]
+                col = 0 if i < col_size else 1
+                row = i if i < col_size else i - col_size
+                tx = inner_x - 16 if col == 0 else inner_x + 16
+                ty = current_y + row * 14
+                bb = draw.textbbox((0, 0), p_text, font=planet_font)
+                draw.text((tx - (bb[2]-bb[0])/2, ty), p_text, fill=color_map["planet"], font=planet_font)
+        else:
+            for kind, text in planet_lines:
+                f = font_map[kind]
+                bb = draw.textbbox((0, 0), text, font=f)
+                draw.text((inner_x - (bb[2]-bb[0])/2, current_y), text, fill=color_map[kind], font=f)
+                current_y += 14
 
     buf = io.BytesIO()
     img.save(buf, format="PNG")

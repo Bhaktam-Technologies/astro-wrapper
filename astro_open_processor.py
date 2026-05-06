@@ -360,10 +360,10 @@ def jhora_chart_image():
         if chart_type in {"Bhava", "Chalit", "bhava", "chalit"}:
             if label_mode == "degrees":
                 label_mode = "house"
-            if label_mode not in {"house", "cusp", "none"}:
+            if label_mode not in {"house", "cusp", "none", "sign_number"}:
                 return _err(
                     f"Unknown label_mode for Bhava chart: {label_mode}. "
-                    "Use one of: house, cusp, none"
+                    "Use one of: house, cusp, sign_number, none"
                 )
             method = body.get("bhaava_madhya_method", body.get("bhava_madhya_method"))
             bhava = pyjhora_helper.get_bhava_chart(
