@@ -24,6 +24,7 @@ from helpers.validators import (
     ValidationError,
     extract_birth_params,
     extract_match_params,
+    extract_transit_params,
     extract_session_config,
 )
 
@@ -89,6 +90,7 @@ def endpoint(kind="birth"):
     extractors = {
         "birth": extract_birth_params,
         "match": extract_match_params,
+        "transit": extract_transit_params,
         "none": lambda body: dict(body or {}),
     }
 
@@ -310,6 +312,11 @@ def jhora_vimsottari_dasa(**p): return pyjhora_helper.get_vimsottari_dasa(**p)
 @app.route("/jhora/vimshottari-dasha", methods=["POST"])
 @endpoint()
 def jhora_vimshottari_dasha(**p): return pyjhora_helper.get_vimshottari_dasha(**p)
+
+
+@app.route("/jhora/gochar", methods=["POST"])
+@endpoint(kind="transit")
+def jhora_gochar(**p): return pyjhora_helper.get_gochar(**p)
 
 
 @app.route("/jhora/yogini-dasa", methods=["POST"])

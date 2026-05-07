@@ -285,6 +285,74 @@ def _add_house_numbers(data):
     return data
 
 
+def get_gochar(**params):
+    """Gochar (Transit) — current planetary positions mapped to natal Lagna and Moon charts."""
+    transit_year   = params.pop("transit_year")
+    transit_month  = params.pop("transit_month")
+    transit_day    = params.pop("transit_day")
+    transit_hour   = params.pop("transit_hour")
+    transit_minute = params.pop("transit_minute")
+    transit_tz     = params.pop("transit_timezone_offset")
+
+    # Build natal chart to get natal Lagna and Moon sign
+    place, dob, tob, natal_jd = _build_inputs(**params)
+    natal_rc = charts.rasi_chart(natal_jd, place)
+    natal_data = [_format_planet_position(e) for e in natal_rc]
+
+    natal_lagna_sign = next((e["sign_number"] for e in natal_data if e["planet_id"] == "L"), 1)
+    natal_moon_sign  = next((e["sign_number"] for e in natal_data if e["planet_id"] == 1), 1)
+
+    # Build transit chart using transit date/time at same location
+    transit_place = drik.Place(
+        params["location_name"],
+        float(params["latitude"]),
+        float(params["longitude"]),
+        float(transit_tz),
+    )
+    t_time_decimal = transit_hour + transit_minute / 60.0
+    transit_jd = swe.julday(transit_year, transit_month, transit_day, t_time_decimal)
+    transit_rc = charts.rasi_chart(transit_jd, transit_place)
+
+    # Format transit planets (exclude Lagna — it's location-specific, not a planet)
+    transit_planets = []
+    for e in transit_rc:
+        label = e[0]
+        if label == "L":
+            continue
+        formatted = _format_planet_position(e)
+        transit_planets.append(formatted)
+
+    def _map_to_chart(planets, ref_sign):
+        result = []
+        for p in planets:
+            result.append({
+                "planet": p["planet"],
+                "sign_number": p["sign_number"],
+                "sign": p["sign"],
+                "degrees": p["degrees"],
+                "house": (p["sign_number"] - ref_sign) % 12 + 1,
+            })
+        return result
+
+    transit_date = f"{transit_year:04d}-{transit_month:02d}-{transit_day:02d}"
+    transit_time = f"{transit_hour:02d}:{transit_minute:02d}"
+
+    return {
+        "transit_date": transit_date,
+        "transit_time": transit_time,
+        "lagna_chart": {
+            "natal_lagna_sign": natal_lagna_sign,
+            "natal_lagna_sign_name": _safe_name(SIGN_NAMES, natal_lagna_sign - 1, "Sign"),
+            "planets": _map_to_chart(transit_planets, natal_lagna_sign),
+        },
+        "moon_chart": {
+            "natal_moon_sign": natal_moon_sign,
+            "natal_moon_sign_name": _safe_name(SIGN_NAMES, natal_moon_sign - 1, "Sign"),
+            "planets": _map_to_chart(transit_planets, natal_moon_sign),
+        },
+    }
+
+
 def get_divisional_chart(divisional_chart_factor, chart_method=1, **params):
     """Return a single divisional chart by factor."""
     place, dob, tob, jd = _build_inputs(**params)
