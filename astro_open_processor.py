@@ -307,6 +307,11 @@ def jhora_karakamsa(**p): return advanced_helper.get_karakamsa(**p)
 def jhora_vimsottari_dasa(**p): return pyjhora_helper.get_vimsottari_dasa(**p)
 
 
+@app.route("/jhora/vimshottari-dasha", methods=["POST"])
+@endpoint()
+def jhora_vimshottari_dasha(**p): return pyjhora_helper.get_vimshottari_dasha(**p)
+
+
 @app.route("/jhora/yogini-dasa", methods=["POST"])
 @endpoint()
 def jhora_yogini_dasa(**p): return pyjhora_helper.get_yogini_dasa(**p)

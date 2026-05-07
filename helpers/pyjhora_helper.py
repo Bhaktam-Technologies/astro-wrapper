@@ -716,6 +716,69 @@ def get_vimsottari_dasa(**params):
     return {"meta": meta, "periods": entries}
 
 
+def _parse_vimsottari_raw(jd, place):
+    """Return (meta_dict, raw_data_list) from PyJHora vimsottari output."""
+    vd = vimsottari.get_vimsottari_dhasa_bhukthi(jd, place)
+    meta = {}
+    data = vd
+    if isinstance(vd, (list, tuple)) and len(vd) == 2 and isinstance(vd[0], tuple):
+        if len(vd[0]) == 3:
+            meta = {
+                "nakshatra": int(vd[0][0]),
+                "pada": int(vd[0][1]),
+                "pada_index": int(vd[0][2]),
+            }
+        elif len(vd[0]) >= 2:
+            meta = {"nakshatra": int(vd[0][0]), "pada": int(vd[0][1])}
+        data = vd[1]
+    return meta, data if isinstance(data, list) else []
+
+
+def get_vimshottari_dasha(**params):
+    """Return all Mahadasha periods, each with its nested Antardasha list."""
+    place, dob, tob, jd = _build_inputs(**params)
+    meta, data = _parse_vimsottari_raw(jd, place)
+
+    # Collect all entries as (maha_lord, date_str) to compute end dates
+    maha_map = {}
+    maha_order = []
+    antar_rows = []  # (maha_lord, antar_lord, date_str)
+
+    for e in data:
+        if not (isinstance(e, (list, tuple)) and len(e) >= 2):
+            continue
+        lords, date_tuple = e[0], e[1]
+        if not isinstance(lords, (list, tuple)) or len(lords) < 1:
+            continue
+        maha_lord = _planet_label(lords[0])
+        y, m, d = int(date_tuple[0]), int(date_tuple[1]), int(date_tuple[2])
+        date_str = f"{y:04d}-{m:02d}-{d:02d}"
+
+        if maha_lord not in maha_map:
+            maha_map[maha_lord] = {"planet": maha_lord, "start_date": date_str, "end_date": None, "antardasha": []}
+            maha_order.append(maha_lord)
+
+        if len(lords) >= 2:
+            antar_lord = _planet_label(lords[1])
+            antar_rows.append((maha_lord, antar_lord, date_str))
+
+    # Fill end_date of each mahadasha = start_date of the next one
+    for i, key in enumerate(maha_order):
+        if i + 1 < len(maha_order):
+            maha_map[key]["end_date"] = maha_map[maha_order[i + 1]]["start_date"]
+
+    # Fill antardasha with end_date = start of next antardasha row
+    for i, (maha_lord, antar_lord, date_str) in enumerate(antar_rows):
+        end = antar_rows[i + 1][2] if i + 1 < len(antar_rows) else maha_map[maha_lord]["end_date"]
+        maha_map[maha_lord]["antardasha"].append({
+            "planet": f"{maha_lord}/{antar_lord}",
+            "start_date": date_str,
+            "end_date": end,
+        })
+
+    return {"meta": meta, "mahadasha": [maha_map[k] for k in maha_order]}
+
+
 def get_yogini_dasa(**params):
     place, dob, tob, jd = _build_inputs(**params)
     yd = yogini.get_dhasa_bhukthi(dob, tob, place)
