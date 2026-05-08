@@ -726,5 +726,5 @@ def generate_gochar_chart_image(planets, ref_sign, title="Gochar", size=600):
     """
     return generate_north_indian_chart(
         planets, title=title, size=size,
-        label_mode="degrees", theme="dark", start_sign=ref_sign,
+        label_mode="degrees", theme="light", start_sign=ref_sign,
     )
