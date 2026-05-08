@@ -78,6 +78,80 @@ LUNAR_MONTH_NAMES = [
     "Ashwin", "Kartika", "Margashira", "Pausha", "Magha", "Phalguna",
 ]
 
+# ---------------------------------------------------------------------------
+# Hindi name tables
+# ---------------------------------------------------------------------------
+
+PLANET_NAMES_HI = {
+    "Lagna": "लग्न",
+    "Sun": "सूर्य",
+    "Moon": "चंद्र",
+    "Mars": "मंगल",
+    "Mercury": "बुध",
+    "Jupiter": "गुरु",
+    "Venus": "शुक्र",
+    "Saturn": "शनि",
+    "Rahu": "राहु",
+    "Ketu": "केतु",
+    "Uranus": "यूरेनस",
+    "Neptune": "नेपच्यून",
+    "Pluto": "प्लूटो",
+}
+
+SIGN_NAMES_HI = [
+    "मेष", "वृषभ", "मिथुन", "कर्क", "सिंह", "कन्या",
+    "तुला", "वृश्चिक", "धनु", "मकर", "कुंभ", "मीन",
+]
+
+NAKSHATRA_NAMES_HI = [
+    "अश्विनी", "भरणी", "कृत्तिका", "रोहिणी", "मृगशिरा", "आर्द्रा",
+    "पुनर्वसु", "पुष्य", "आश्लेषा", "मघा", "पूर्व फाल्गुनी", "उत्तर फाल्गुनी",
+    "हस्त", "चित्रा", "स्वाती", "विशाखा", "अनुराधा", "ज्येष्ठा",
+    "मूल", "पूर्व आषाढ़ा", "उत्तर आषाढ़ा", "श्रवण", "धनिष्ठा", "शतभिषा",
+    "पूर्व भाद्रपद", "उत्तर भाद्रपद", "रेवती",
+]
+
+WEEKDAY_NAMES_HI = ["रविवार", "सोमवार", "मंगलवार", "बुधवार", "गुरुवार", "शुक्रवार", "शनिवार"]
+
+TITHI_NAMES_HI = [
+    "प्रतिपदा", "द्वितीया", "तृतीया", "चतुर्थी", "पंचमी",
+    "षष्ठी", "सप्तमी", "अष्टमी", "नवमी", "दशमी",
+    "एकादशी", "द्वादशी", "त्रयोदशी", "चतुर्दशी", "पूर्णिमा",
+    "प्रतिपदा", "द्वितीया", "तृतीया", "चतुर्थी", "पंचमी",
+    "षष्ठी", "सप्तमी", "अष्टमी", "नवमी", "दशमी",
+    "एकादशी", "द्वादशी", "त्रयोदशी", "चतुर्दशी", "अमावस्या",
+]
+
+YOGA_NAMES_HI = [
+    "विष्कुंभ", "प्रीति", "आयुष्मान", "सौभाग्य", "शोभन", "अतिगंड",
+    "सुकर्मा", "धृति", "शूल", "गंड", "वृद्धि", "ध्रुव",
+    "व्याघात", "हर्षण", "वज्र", "सिद्धि", "व्यतीपात", "वरीयान",
+    "परिघ", "शिव", "सिद्ध", "साध्य", "शुभ", "शुक्ल",
+    "ब्रह्म", "इंद्र", "वैधृति",
+]
+
+KARANA_NAMES_HI = (
+    ["किंस्तुघ्न"]
+    + ["बव", "बालव", "कौलव", "तैतिल", "गरिज", "वणिज", "विष्टि"] * 8
+    + ["शकुनि", "चतुष्पद", "नाग"]
+)
+
+LUNAR_MONTH_NAMES_HI = [
+    "", "चैत्र", "वैशाख", "ज्येष्ठ", "आषाढ़", "श्रावण", "भाद्रपद",
+    "आश्विन", "कार्तिक", "मार्गशीर्ष", "पौष", "माघ", "फाल्गुन",
+]
+
+
+def _hi(english_name):
+    """Translate any known English astrology name to Hindi. Returns None if unknown."""
+    if english_name is None:
+        return None
+    return (
+        PLANET_NAMES_HI.get(english_name)
+        or next((SIGN_NAMES_HI[i] for i, n in enumerate(SIGN_NAMES) if n == english_name), None)
+        or next((NAKSHATRA_NAMES_HI[i] for i, n in enumerate(NAKSHATRA_NAMES) if n == english_name), None)
+    )
+
 # Divisional chart factors and their JHora builders. `None` means "use the
 # generic divisional_positions_from_rasi_positions helper".
 DIVISIONAL_BUILDERS = {
@@ -218,17 +292,27 @@ def _format_planet_position(entry):
     nak_num, pada, nak_lord = _nakshatra_of_longitude(sign_idx_int, degrees_f)
     nak_name = _safe_name(NAKSHATRA_NAMES, nak_num - 1, "Nakshatra")
 
+    planet_en   = _planet_label(label)
+    sign_en     = _safe_name(SIGN_NAMES, sign_idx_int, "Sign")
+    sign_lord_en = PLANET_NAMES.get(_SIGN_LORDS[sign_idx_int], None)
+    nak_lord_en = nak_lord
+
     entry_out = {
-        "planet": _planet_label(label),
+        "planet": planet_en,
+        "planet_hi": PLANET_NAMES_HI.get(planet_en),
         "planet_id": label if label != "L" else "L",
-        "sign": _safe_name(SIGN_NAMES, sign_idx_int, "Sign"),
+        "sign": sign_en,
+        "sign_hi": _safe_name(SIGN_NAMES_HI, sign_idx_int, ""),
         "sign_number": sign_idx_int + 1,
-        "sign_lord": PLANET_NAMES.get(_SIGN_LORDS[sign_idx_int], None),
+        "sign_lord": sign_lord_en,
+        "sign_lord_hi": PLANET_NAMES_HI.get(sign_lord_en),
         "degrees": round(degrees_f, 4),
         "nakshatra": nak_name,
+        "nakshatra_hi": _safe_name(NAKSHATRA_NAMES_HI, nak_num - 1, ""),
         "nakshatra_number": nak_num,
         "nakshatra_pada": pada,
-        "nakshatra_lord": nak_lord,
+        "nakshatra_lord": nak_lord_en,
+        "nakshatra_lord_hi": PLANET_NAMES_HI.get(nak_lord_en),
         "relationship": _dignity(label if label != "L" else None,
                                  sign_idx_int, degrees_f),
     }
@@ -313,22 +397,18 @@ def get_gochar(**params):
     transit_jd = swe.julday(transit_year, transit_month, transit_day, t_time_decimal)
     transit_rc = charts.rasi_chart(transit_jd, transit_place)
 
-    # Format transit planets (exclude Lagna — it's location-specific, not a planet)
-    transit_planets = []
-    for e in transit_rc:
-        label = e[0]
-        if label == "L":
-            continue
-        formatted = _format_planet_position(e)
-        transit_planets.append(formatted)
+    # Format transit planets including Lagna
+    transit_planets = [_format_planet_position(e) for e in transit_rc]
 
     def _map_to_chart(planets, ref_sign):
         result = []
         for p in planets:
             result.append({
                 "planet": p["planet"],
+                "planet_hi": p.get("planet_hi"),
                 "sign_number": p["sign_number"],
                 "sign": p["sign"],
+                "sign_hi": p.get("sign_hi"),
                 "degrees": p["degrees"],
                 "house": (p["sign_number"] - ref_sign) % 12 + 1,
             })
@@ -337,17 +417,40 @@ def get_gochar(**params):
     transit_date = f"{transit_year:04d}-{transit_month:02d}-{transit_day:02d}"
     transit_time = f"{transit_hour:02d}:{transit_minute:02d}"
 
+    lagna_sign_name = _safe_name(SIGN_NAMES, natal_lagna_sign - 1, "Sign")
+    moon_sign_name  = _safe_name(SIGN_NAMES, natal_moon_sign - 1, "Sign")
+
+    natal_lagna_entry = next((e for e in natal_data if e["planet_id"] == "L"), None)
+    natal_moon_entry  = next((e for e in natal_data if e["planet_id"] == 1), None)
+
+    def _lagna_detail(entry):
+        if not entry:
+            return None
+        return {
+            "sign_number": entry["sign_number"],
+            "sign": entry["sign"],
+            "sign_hi": entry.get("sign_hi"),
+            "degrees": entry["degrees"],
+            "nakshatra": entry["nakshatra"],
+            "nakshatra_hi": entry.get("nakshatra_hi"),
+            "nakshatra_pada": entry["nakshatra_pada"],
+        }
+
     return {
         "transit_date": transit_date,
         "transit_time": transit_time,
         "lagna_chart": {
             "natal_lagna_sign": natal_lagna_sign,
-            "natal_lagna_sign_name": _safe_name(SIGN_NAMES, natal_lagna_sign - 1, "Sign"),
+            "natal_lagna_sign_name": lagna_sign_name,
+            "natal_lagna_sign_name_hi": _safe_name(SIGN_NAMES_HI, natal_lagna_sign - 1, ""),
+            "natal_lagna": _lagna_detail(natal_lagna_entry),
             "planets": _map_to_chart(transit_planets, natal_lagna_sign),
         },
         "moon_chart": {
             "natal_moon_sign": natal_moon_sign,
-            "natal_moon_sign_name": _safe_name(SIGN_NAMES, natal_moon_sign - 1, "Sign"),
+            "natal_moon_sign_name": moon_sign_name,
+            "natal_moon_sign_name_hi": _safe_name(SIGN_NAMES_HI, natal_moon_sign - 1, ""),
+            "natal_moon": _lagna_detail(natal_moon_entry),
             "planets": _map_to_chart(transit_planets, natal_moon_sign),
         },
     }
@@ -679,37 +782,50 @@ def get_panchanga(**params):
     tithi_name_idx = (tithi_num - 1) % 30
     karana_num = int(kar[0])
 
+    nak_name_en   = _safe_name(NAKSHATRA_NAMES, int(nak[0]) - 1, "Nakshatra")
+    tithi_name_en = _safe_name(TITHI_NAMES, tithi_name_idx, "Tithi")
+    yoga_name_en  = _safe_name(YOGA_NAMES, int(yog[0]) - 1, "Yoga")
+    karan_name_en = _safe_name(KARANA_NAMES, karana_num - 1, "Karana")
+    vaara_name_en = _safe_name(WEEKDAY_NAMES, int(vaara_idx), "Day")
+    lm_name_en    = _safe_name(LUNAR_MONTH_NAMES, int(lm[0]), "Maasa") if lm else None
+
     panchanga = {
         "date": {"year": dob[0], "month": dob[1], "day": dob[2]},
         "nakshatra": {
             "number": int(nak[0]),
-            "name": _safe_name(NAKSHATRA_NAMES, int(nak[0]) - 1, "Nakshatra"),
+            "name": nak_name_en,
+            "name_hi": _safe_name(NAKSHATRA_NAMES_HI, int(nak[0]) - 1, ""),
             "pada": int(nak[1]),
             **_duration_struct(nak[2] if len(nak) > 2 else None,
                                 nak[3] if len(nak) > 3 else None),
         },
         "tithi": {
             "number": tithi_num,
-            "name": _safe_name(TITHI_NAMES, tithi_name_idx, "Tithi"),
+            "name": tithi_name_en,
+            "name_hi": _safe_name(TITHI_NAMES_HI, tithi_name_idx, ""),
             "paksha": "Shukla" if tithi_num <= 15 else "Krishna",
+            "paksha_hi": "शुक्ल" if tithi_num <= 15 else "कृष्ण",
             **_duration_struct(tit[1] if len(tit) > 1 else None,
                                 tit[2] if len(tit) > 2 else None),
         },
         "yoga": {
             "number": int(yog[0]),
-            "name": _safe_name(YOGA_NAMES, int(yog[0]) - 1, "Yoga"),
+            "name": yoga_name_en,
+            "name_hi": _safe_name(YOGA_NAMES_HI, int(yog[0]) - 1, ""),
             **_duration_struct(yog[1] if len(yog) > 1 else None,
                                 yog[2] if len(yog) > 2 else None),
         },
         "karana": {
             "number": karana_num,
-            "name": _safe_name(KARANA_NAMES, karana_num - 1, "Karana"),
+            "name": karan_name_en,
+            "name_hi": _safe_name(KARANA_NAMES_HI, karana_num - 1, ""),
             **_duration_struct(kar[1] if len(kar) > 1 else None,
                                 kar[2] if len(kar) > 2 else None),
         },
         "weekday": {
             "number": int(vaara_idx),
-            "name": _safe_name(WEEKDAY_NAMES, int(vaara_idx), "Day"),
+            "name": vaara_name_en,
+            "name_hi": _safe_name(WEEKDAY_NAMES_HI, int(vaara_idx), ""),
         },
         "sunrise": {"hours": float(sr[0]) if sr else None, "time": sr[1] if sr and len(sr) > 1 else None},
         "sunset": {"hours": float(ss[0]) if ss else None, "time": ss[1] if ss and len(ss) > 1 else None},
@@ -717,7 +833,8 @@ def get_panchanga(**params):
         "moonset": {"hours": float(ms[0]) if ms else None, "time": ms[1] if ms and len(ms) > 1 else None},
         "lunar_month": {
             "number": int(lm[0]) if lm else None,
-            "name": _safe_name(LUNAR_MONTH_NAMES, int(lm[0]), "Maasa") if lm else None,
+            "name": lm_name_en,
+            "name_hi": _safe_name(LUNAR_MONTH_NAMES_HI, int(lm[0]), "") if lm else None,
             "adhika": bool(lm[1]) if lm and len(lm) > 1 else False,
         },
         "raahu_kaalam": {"start": rk[0], "end": rk[1]} if rk else None,
@@ -823,7 +940,11 @@ def get_vimshottari_dasha(**params):
         date_str = f"{y:04d}-{m:02d}-{d:02d}"
 
         if maha_lord not in maha_map:
-            maha_map[maha_lord] = {"planet": maha_lord, "start_date": date_str, "end_date": None, "antardasha": []}
+            maha_map[maha_lord] = {
+                "planet": maha_lord,
+                "planet_hi": PLANET_NAMES_HI.get(maha_lord),
+                "start_date": date_str, "end_date": None, "antardasha": [],
+            }
             maha_order.append(maha_lord)
 
         if len(lords) >= 2:
@@ -840,6 +961,7 @@ def get_vimshottari_dasha(**params):
         end = antar_rows[i + 1][2] if i + 1 < len(antar_rows) else maha_map[maha_lord]["end_date"]
         maha_map[maha_lord]["antardasha"].append({
             "planet": f"{maha_lord}/{antar_lord}",
+            "planet_hi": f"{PLANET_NAMES_HI.get(maha_lord, maha_lord)}/{PLANET_NAMES_HI.get(antar_lord, antar_lord)}",
             "start_date": date_str,
             "end_date": end,
         })

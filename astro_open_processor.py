@@ -350,6 +350,7 @@ def jhora_chart_image():
         size = int(body.get("size", 600))
         label_mode = str(body.get("label_mode", "degrees")).lower()
         style = str(body.get("style", "north")).lower()
+        language = str(body.get("language", "en")).lower()
 
         # Accept pre-computed planets array (e.g. from /jhora/moon)
         planets_input = body.get("planets")
@@ -360,26 +361,26 @@ def jhora_chart_image():
                 label_mode = "sign_number"
             png_bytes = chart_image.generate_chart_image(
                 planets_input, chart_name=body.get("title", "Moon Chart"),
-                size=size, label_mode=label_mode, style=style,
+                size=size, label_mode=label_mode, style=style, language=language,
             )
             return send_file(io.BytesIO(png_bytes),
                              mimetype="image/png",
                              download_name="moon_chart.png")
 
-        # Gochar (Transit) charts — needs transit params, dark theme, special renderer
+        # Gochar (Transit) charts — needs transit params, special renderer
         if chart_type in {"gochar_lagna", "gochar_moon"}:
             params = extract_transit_params(body)
             gochar = pyjhora_helper.get_gochar(**params)
             if chart_type == "gochar_lagna":
                 chart = gochar["lagna_chart"]
                 ref_sign = chart["natal_lagna_sign"]
-                title = "Gochar — Lagna Chart"
+                title = "गोचर — लग्न" if language == "hi" else "Gochar — Lagna Chart"
             else:
                 chart = gochar["moon_chart"]
                 ref_sign = chart["natal_moon_sign"]
-                title = "Gochar — Moon Chart"
+                title = "गोचर — चंद्र" if language == "hi" else "Gochar — Moon Chart"
             png_bytes = chart_image.generate_gochar_chart_image(
-                chart["planets"], ref_sign=ref_sign, title=title, size=size,
+                chart["planets"], ref_sign=ref_sign, title=title, size=size, language=language,
             )
             return send_file(io.BytesIO(png_bytes), mimetype="image/png",
                              download_name=f"{chart_type}.png")
@@ -427,7 +428,7 @@ def jhora_chart_image():
             title = chart_type.replace("_", " ")
 
         png_bytes = chart_image.generate_chart_image(
-            data, chart_name=title, size=size, label_mode=label_mode, style=style,
+            data, chart_name=title, size=size, label_mode=label_mode, style=style, language=language,
         )
         return send_file(io.BytesIO(png_bytes),
                          mimetype="image/png",
