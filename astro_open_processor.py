@@ -402,7 +402,7 @@ def jhora_chart_image():
                 **params,
             )
             png_bytes = chart_image.generate_bhava_chart(
-                bhava, title="Bhava / Chalit Chart", size=size, label_mode=label_mode, style=style,
+                bhava, title="Bhava / Chalit Chart", size=size, label_mode=label_mode, style=style, language=language,
             )
             return send_file(io.BytesIO(png_bytes),
                              mimetype="image/png",

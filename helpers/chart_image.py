@@ -448,7 +448,7 @@ def generate_north_indian_chart(chart_data, title="Rasi Chart", size=600,
 # ---------------------------------------------------------------------------
 
 def generate_bhava_chart(bhava_data, title="Bhava / Chalit Chart", size=600,
-                         label_mode="house", style="north"):
+                         label_mode="house", style="north", language="en"):
     """Render a bhava (chalit) chart in North or South Indian style.
     bhava_data: dict with 'houses' key — list of
       {house, sign, cusp_start, cusp_mid, cusp_end, planets, planet_ids}
@@ -478,14 +478,14 @@ def generate_bhava_chart(bhava_data, title="Bhava / Chalit Chart", size=600,
         cell["house"] = int(h["house"]) if cell["house"] is None else f"{cell['house']}/{int(h['house'])}"
         cell["cusp_mid"] = h.get("cusp_mid", cell["cusp_mid"])
         for p in h.get("planets", []):
-            cell["planets"].append(PLANET_ABBR.get(p, p[:2]))
+            cell["planets"].append(_planet_abbr(p, language))
 
     if style == "south":
-        return _bhava_south(cells, title=title, size=size, label_mode=label_mode)
-    return _bhava_north(cells, houses_list, title=title, size=size, label_mode=label_mode)
+        return _bhava_south(cells, title=title, size=size, label_mode=label_mode, language=language)
+    return _bhava_north(cells, houses_list, title=title, size=size, label_mode=label_mode, language=language)
 
 
-def _bhava_south(cells, title="Bhava / Chalit Chart", size=600, label_mode="house"):
+def _bhava_south(cells, title="Bhava / Chalit Chart", size=600, label_mode="house", language="en"):
     """South Indian fixed-sign grid for the bhava chart."""
     margin = 40
     title_height = 50
@@ -497,10 +497,11 @@ def _bhava_south(cells, title="Bhava / Chalit Chart", size=600, label_mode="hous
     img = Image.new("RGB", (img_w, img_h), "white")
     draw = ImageDraw.Draw(img)
 
-    title_font  = _try_load_font(18)
-    sign_font   = _try_load_font(11)
-    house_font  = _try_load_font(14)
-    planet_font = _try_load_font(11)
+    _font = _try_load_devanagari_font if language == "hi" else _try_load_font
+    title_font  = _font(22)
+    sign_font   = _font(14)
+    house_font  = _font(17)
+    planet_font = _font(14)
 
     bbox = draw.textbbox((0, 0), title, font=title_font)
     tw = bbox[2] - bbox[0]
@@ -524,7 +525,7 @@ def _bhava_south(cells, title="Bhava / Chalit Chart", size=600, label_mode="hous
         y = oy + row * cell_h
         cell = cells[sign_idx]
 
-        draw.text((x + 3, y + 2), SIGN_NAMES_SHORT[sign_idx], fill="red", font=sign_font)
+        draw.text((x + 3, y + 2), _sign_short(sign_idx, language), fill="red", font=sign_font)
 
         if cell["house"] is not None:
             if label_mode == "cusp" and cell["cusp_mid"] is not None:
@@ -552,7 +553,7 @@ def _bhava_south(cells, title="Bhava / Chalit Chart", size=600, label_mode="hous
 
 
 def _bhava_north(cells, houses_list, title="Bhava / Chalit Chart", size=600,
-                 label_mode="house"):
+                 label_mode="house", language="en"):
     """North Indian diamond layout for the bhava chart.
 
     Houses are fixed in the 12 diamond regions (same geometry as generate_north_indian_chart).
@@ -568,10 +569,11 @@ def _bhava_north(cells, houses_list, title="Bhava / Chalit Chart", size=600,
     img = Image.new("RGB", (img_w, img_h), "white")
     draw = ImageDraw.Draw(img)
 
-    title_font  = _try_load_font(18)
-    sign_font   = _try_load_font(10)
-    house_font  = _try_load_font(10)
-    planet_font = _try_load_font(10)
+    _font = _try_load_devanagari_font if language == "hi" else _try_load_font
+    title_font  = _font(22)
+    sign_font   = _font(14)
+    house_font  = _font(14)
+    planet_font = _font(14)
 
     bbox = draw.textbbox((0, 0), title, font=title_font)
     tw = bbox[2] - bbox[0]
@@ -634,12 +636,11 @@ def _bhava_north(cells, houses_list, title="Bhava / Chalit Chart", size=600,
         planets_to_draw = []
         is_lagna_house = False
         for p in h_entry.get("planets", []):
-            abbr = PLANET_ABBR.get(p, p[:2])
             if p in {"Lagna", "As", "L"}:
-                planets_to_draw.insert(0, "La")
+                planets_to_draw.insert(0, _planet_abbr("Lagna", language))
                 is_lagna_house = True
             else:
-                planets_to_draw.append(abbr)
+                planets_to_draw.append(_planet_abbr(p, language))
 
         region_data[h_num] = {
             "sign_idx": sign_idx,
