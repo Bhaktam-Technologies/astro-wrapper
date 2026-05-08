@@ -366,6 +366,24 @@ def jhora_chart_image():
                              mimetype="image/png",
                              download_name="moon_chart.png")
 
+        # Gochar (Transit) charts — needs transit params, dark theme, special renderer
+        if chart_type in {"gochar_lagna", "gochar_moon"}:
+            params = extract_transit_params(body)
+            gochar = pyjhora_helper.get_gochar(**params)
+            if chart_type == "gochar_lagna":
+                chart = gochar["lagna_chart"]
+                ref_sign = chart["natal_lagna_sign"]
+                title = "Gochar — Lagna Chart"
+            else:
+                chart = gochar["moon_chart"]
+                ref_sign = chart["natal_moon_sign"]
+                title = "Gochar — Moon Chart"
+            png_bytes = chart_image.generate_gochar_chart_image(
+                chart["planets"], ref_sign=ref_sign, title=title, size=size,
+            )
+            return send_file(io.BytesIO(png_bytes), mimetype="image/png",
+                             download_name=f"{chart_type}.png")
+
         params = extract_birth_params(body)
 
         # Bhava/Chalit takes a separate renderer and its own label_mode vocabulary.

@@ -202,12 +202,12 @@ def _safe_center(pts):
 
 
 def generate_north_indian_chart(chart_data, title="Rasi Chart", size=600,
-                                label_mode="degrees"):
-    """North Indian style — SS dark theme.
+                                label_mode="degrees", theme="light", start_sign=None):
+    """North Indian style chart.
 
-    Houses are fixed (H1=bottom-center, anti-clockwise to H12).
-    Lagna sign rotates into H1. Each cell shows its house number once (gold),
-    then planets as: degree on top line, abbreviation on next line (white).
+    Houses are fixed (H1=top-center). Lagna sign rotates into H1.
+    theme: "light" (white bg) or "dark" (black bg, yellow lines, white text).
+    start_sign: 1-based sign number to force into House 1 (overrides auto-detect).
     """
     margin = 30
     title_height = 44
@@ -215,12 +215,20 @@ def generate_north_indian_chart(chart_data, title="Rasi Chart", size=600,
     img_w = size
     img_h = size + title_height
 
-    BG           = (255, 255, 255) # White background
-    COLOR_LINE   = (255, 180, 0)   # Yellow lines
-    COLOR_SIGN   = (255, 0, 0)     # Red sign numbers
-    COLOR_PLANET = (0, 0, 139)     # DarkBlue planets
-    COLOR_DEGREE = (0, 0, 0)       # Black degrees
-    COLOR_TITLE  = (0, 0, 0)       # Black title
+    if theme == "dark":
+        BG           = (0, 0, 0)        # Black background
+        COLOR_LINE   = (255, 180, 0)    # Yellow lines
+        COLOR_SIGN   = (255, 180, 0)    # Gold house numbers
+        COLOR_PLANET = (255, 255, 255)  # White planets
+        COLOR_DEGREE = (255, 255, 255)  # White degrees
+        COLOR_TITLE  = (255, 255, 255)  # White title
+    else:
+        BG           = (255, 255, 255)  # White background
+        COLOR_LINE   = (255, 180, 0)    # Yellow lines
+        COLOR_SIGN   = (255, 0, 0)      # Red sign numbers
+        COLOR_PLANET = (0, 0, 139)      # DarkBlue planets
+        COLOR_DEGREE = (0, 0, 0)        # Black degrees
+        COLOR_TITLE  = (0, 0, 0)        # Black title
 
     img = Image.new("RGB", (img_w, img_h), BG)
     draw = ImageDraw.Draw(img)
@@ -283,14 +291,15 @@ def generate_north_indian_chart(chart_data, title="Rasi Chart", size=600,
     elif title and "Sun" in title:
         ref_name = "Sun"
 
-    # Find the starting sign for House 1
-    start_sign = 1
-    for entry in chart_data:
-        p_name = entry.get("planet", "").lower()
-        p_id = str(entry.get("planet_id", "")).lower()
-        if p_name == ref_name.lower() or p_id == ref_name[0].lower() or (ref_name == "Lagna" and (p_name == "as" or p_id == "l")):
-            start_sign = int(entry["sign_number"])
-            break
+    # Find the starting sign for House 1 (use override if provided)
+    if start_sign is None:
+        start_sign = 1
+        for entry in chart_data:
+            p_name = entry.get("planet", "").lower()
+            p_id = str(entry.get("planet_id", "")).lower()
+            if p_name == ref_name.lower() or p_id == ref_name[0].lower() or (ref_name == "Lagna" and (p_name == "as" or p_id == "l")):
+                start_sign = int(entry["sign_number"])
+                break
 
     # Group planets by House (1-12)
     house_planets = {h: [] for h in range(1, 13)}
@@ -706,4 +715,16 @@ def generate_chart_image(chart_data, chart_name="Rasi Chart", size=600,
         )
     return generate_north_indian_chart(
         chart_data, title=chart_name, size=size, label_mode=label_mode,
+    )
+
+
+def generate_gochar_chart_image(planets, ref_sign, title="Gochar", size=600):
+    """Render a Gochar (Transit) chart in dark theme.
+
+    planets: list of {planet, sign_number, degrees, house} from get_gochar()
+    ref_sign: 1-based natal reference sign (Lagna sign or Moon sign) → goes to House 1
+    """
+    return generate_north_indian_chart(
+        planets, title=title, size=size,
+        label_mode="degrees", theme="dark", start_sign=ref_sign,
     )
