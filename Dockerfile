@@ -16,7 +16,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends git ca-certific
       && echo "Installing ephemeris to $EPHE_DIR" \
       && cp /tmp/pyjhora/src/jhora/data/ephe/*.se1 "$EPHE_DIR/" \
       && cp /tmp/pyjhora/src/jhora/data/ephe/*.txt "$EPHE_DIR/" \
-      && rm -rf /tmp/pyjhora /var/lib/apt/lists/*
+      && rm -rf /tmp/pyjhora /var/lib/apt/lists/* \
+RUN apt-get update && apt-get install -y fonts-indic
 
 COPY astro_open_processor.py wsgi.py start.sh ./
 COPY logger ./logger
