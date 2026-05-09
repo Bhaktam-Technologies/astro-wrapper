@@ -25,6 +25,7 @@ from helpers.validators import (
     ValidationError,
     extract_birth_params,
     extract_match_params,
+    extract_transit_params,
     extract_session_config,
 )
 
@@ -90,6 +91,7 @@ def endpoint(kind="birth"):
     extractors = {
         "birth": extract_birth_params,
         "match": extract_match_params,
+        "transit": extract_transit_params,
         "none": lambda body: dict(body or {}),
     }
 
@@ -308,6 +310,16 @@ def jhora_karakamsa(**p): return advanced_helper.get_karakamsa(**p)
 def jhora_vimsottari_dasa(**p): return pyjhora_helper.get_vimsottari_dasa(**p)
 
 
+@app.route("/jhora/vimshottari-dasha", methods=["POST"])
+@endpoint()
+def jhora_vimshottari_dasha(**p): return pyjhora_helper.get_vimshottari_dasha(**p)
+
+
+@app.route("/jhora/gochar", methods=["POST"])
+@endpoint(kind="transit")
+def jhora_gochar(**p): return pyjhora_helper.get_gochar(**p)
+
+
 @app.route("/jhora/yogini-dasa", methods=["POST"])
 @endpoint()
 def jhora_yogini_dasa(**p): return pyjhora_helper.get_yogini_dasa(**p)
@@ -339,6 +351,7 @@ def jhora_chart_image():
         size = int(body.get("size", 600))
         label_mode = str(body.get("label_mode", "degrees")).lower()
         style = str(body.get("style", "north")).lower()
+        language = str(body.get("language", "en")).lower()
 
         # Accept pre-computed planets array (e.g. from /jhora/moon)
         planets_input = body.get("planets")
@@ -349,11 +362,29 @@ def jhora_chart_image():
                 label_mode = "sign_number"
             png_bytes = chart_image.generate_chart_image(
                 planets_input, chart_name=body.get("title", "Moon Chart"),
-                size=size, label_mode=label_mode, style=style,
+                size=size, label_mode=label_mode, style=style, language=language,
             )
             return send_file(io.BytesIO(png_bytes),
                              mimetype="image/png",
                              download_name="moon_chart.png")
+
+        # Gochar (Transit) charts — needs transit params, special renderer
+        if chart_type in {"gochar_lagna", "gochar_moon"}:
+            params = extract_transit_params(body)
+            gochar = pyjhora_helper.get_gochar(**params)
+            if chart_type == "gochar_lagna":
+                chart = gochar["lagna_chart"]
+                ref_sign = chart["natal_lagna_sign"]
+                title = "गोचर — लग्न" if language == "hi" else "Gochar — Lagna Chart"
+            else:
+                chart = gochar["moon_chart"]
+                ref_sign = chart["natal_moon_sign"]
+                title = "गोचर — चंद्र" if language == "hi" else "Gochar — Moon Chart"
+            png_bytes = chart_image.generate_gochar_chart_image(
+                chart["planets"], ref_sign=ref_sign, title=title, size=size, language=language,
+            )
+            return send_file(io.BytesIO(png_bytes), mimetype="image/png",
+                             download_name=f"{chart_type}.png")
 
         params = extract_birth_params(body)
 
@@ -372,7 +403,7 @@ def jhora_chart_image():
                 **params,
             )
             png_bytes = chart_image.generate_bhava_chart(
-                bhava, title="Bhava / Chalit Chart", size=size, label_mode=label_mode, style=style,
+                bhava, title="Bhava / Chalit Chart", size=size, label_mode=label_mode, style=style, language=language,
             )
             return send_file(io.BytesIO(png_bytes),
                              mimetype="image/png",
@@ -398,7 +429,7 @@ def jhora_chart_image():
             title = chart_type.replace("_", " ")
 
         png_bytes = chart_image.generate_chart_image(
-            data, chart_name=title, size=size, label_mode=label_mode, style=style,
+            data, chart_name=title, size=size, label_mode=label_mode, style=style, language=language,
         )
         return send_file(io.BytesIO(png_bytes),
                          mimetype="image/png",

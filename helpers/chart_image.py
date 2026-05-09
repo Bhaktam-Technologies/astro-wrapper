@@ -58,37 +58,26 @@ PLANET_ABBR = {
     "Pluto": "Pl",
 }
 
+PLANET_ABBR_HI = {
+    "Lagna": "ल",
+    "Sun": "सू",
+    "Moon": "चं",
+    "Mars": "मं",
+    "Mercury": "बु",
+    "Jupiter": "गु",
+    "Venus": "शु",
+    "Saturn": "श",
+    "Rahu": "रा",
+    "Ketu": "के",
+    "Uranus": "यू",
+    "Neptune": "ने",
+    "Pluto": "प्लू",
+}
 
-def _group_planets_by_sign(chart_data, label_mode="degrees"):
-    """Group planet labels by 0-based sign index.
-
-    sign_number in chart_data is 1-based (1=Aries … 12=Pisces);
-    we convert to 0-based for use as a dict key so callers can look up
-    by the same 0-based index used in SOUTH_INDIAN_POSITIONS.
-
-    label_mode:
-      * "degrees"     → "Su 29°"   (default)
-      * "sign_number" → "Su 7"     (1-based rashi number)
-      * "both"        → "Su 7 · 29°"
-      * "none"        → "Su"
-    """
-    houses = {}
-    for entry in chart_data:
-        sign_num_1based = int(entry["sign_number"])          # 1-based from API
-        sign_idx = sign_num_1based - 1                       # 0-based for grid lookup
-        planet = entry["planet"]
-        abbr = PLANET_ABBR.get(planet, planet[:2])
-        deg = entry.get("degrees", 0)
-        if label_mode == "sign_number":
-            label = f"{abbr} {sign_num_1based}"
-        elif label_mode == "both":
-            label = f"{abbr} {sign_num_1based} · {deg:.0f}\u00b0"
-        elif label_mode == "none":
-            label = abbr
-        else:
-            label = f"{abbr} {deg:.0f}\u00b0"
-        houses.setdefault(sign_idx, []).append(label)
-    return houses
+SIGN_NAMES_SHORT_HI = [
+    "मेष", "वृष", "मिथु", "कर्क", "सिंह", "कन्या",
+    "तुला", "वृश्चि", "धनु", "मकर", "कुंभ", "मीन",
+]
 
 
 def _try_load_font(size):
@@ -106,12 +95,74 @@ def _try_load_font(size):
     return ImageFont.load_default()
 
 
+def _try_load_devanagari_font(size):
+    """Load a Devanagari-capable font; falls back to default if none found."""
+    font_paths = [
+        # macOS
+        "/System/Library/Fonts/Supplemental/Devanagari MT.ttf",
+        "/Library/Fonts/Devanagari MT.ttf",
+        "/System/Library/Fonts/Kohinoor.ttc",
+        # Linux (Noto, Lohit)
+        "/usr/share/fonts/truetype/noto/NotoSansDevanagari-Regular.ttf",
+        "/usr/share/fonts/noto/NotoSansDevanagari-Regular.ttf",
+        "/usr/share/fonts/truetype/lohit-devanagari/Lohit-Devanagari.ttf",
+        "/usr/share/fonts/lohit-devanagari/Lohit-Devanagari.ttf",
+        # Generic fallback
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    ]
+    for path in font_paths:
+        try:
+            return ImageFont.truetype(path, size)
+        except (IOError, OSError):
+            continue
+    return ImageFont.load_default()
+
+
+def _planet_abbr(planet_name, language="en"):
+    if language == "hi":
+        return PLANET_ABBR_HI.get(planet_name, planet_name[:2])
+    return PLANET_ABBR.get(planet_name, planet_name[:2])
+
+
+def _sign_short(sign_idx, language="en"):
+    if language == "hi":
+        try:
+            return SIGN_NAMES_SHORT_HI[sign_idx]
+        except IndexError:
+            pass
+    try:
+        return SIGN_NAMES_SHORT[sign_idx]
+    except IndexError:
+        return str(sign_idx)
+
+
+def _group_planets_by_sign(chart_data, label_mode="degrees", language="en"):
+    """Group planet labels by 0-based sign index."""
+    houses = {}
+    for entry in chart_data:
+        sign_num_1based = int(entry["sign_number"])
+        sign_idx = sign_num_1based - 1
+        planet = entry["planet"]
+        abbr = _planet_abbr(planet, language)
+        deg = entry.get("degrees", 0)
+        if label_mode == "sign_number":
+            label = f"{abbr} {sign_num_1based}"
+        elif label_mode == "both":
+            label = f"{abbr} {sign_num_1based} · {deg:.0f}\u00b0"
+        elif label_mode == "none":
+            label = abbr
+        else:
+            label = f"{abbr} {deg:.0f}\u00b0"
+        houses.setdefault(sign_idx, []).append(label)
+    return houses
+
+
 # ---------------------------------------------------------------------------
 # South Indian chart
 # ---------------------------------------------------------------------------
 
 def generate_south_indian_chart(chart_data, title="Rasi Chart", size=600,
-                                label_mode="degrees"):
+                                label_mode="degrees", language="en"):
     """South Indian style: signs are fixed in cells, planets/lagna move."""
     margin = 40
     title_height = 50
@@ -123,9 +174,10 @@ def generate_south_indian_chart(chart_data, title="Rasi Chart", size=600,
     img = Image.new("RGB", (img_w, img_h), "white")
     draw = ImageDraw.Draw(img)
 
-    title_font = _try_load_font(18)
-    sign_font = _try_load_font(11)
-    planet_font = _try_load_font(10)
+    _font = _try_load_devanagari_font if language == "hi" else _try_load_font
+    title_font  = _font(22)
+    sign_font   = _font(14)
+    planet_font = _font(13)
 
     bbox = draw.textbbox((0, 0), title, font=title_font)
     tw = bbox[2] - bbox[0]
@@ -144,20 +196,20 @@ def generate_south_indian_chart(chart_data, title="Rasi Chart", size=600,
     draw.line([(cx1, cy1), (cx2, cy2)], fill="black", width=1)
     draw.line([(cx2, cy1), (cx1, cy2)], fill="black", width=1)
 
-    houses = _group_planets_by_sign(chart_data, label_mode=label_mode)
+    houses = _group_planets_by_sign(chart_data, label_mode=label_mode, language=language)
 
     for sign_idx in range(12):
         row, col = SOUTH_INDIAN_POSITIONS[sign_idx]
         x = ox + col * cell_w
         y = oy + row * cell_h
 
-        draw.text((x + 3, y + 2), SIGN_NAMES_SHORT[sign_idx], fill="red", font=sign_font)
+        draw.text((x + 3, y + 2), _sign_short(sign_idx, language), fill="red", font=sign_font)
 
         planets = houses.get(sign_idx, [])
-        py = y + 16
+        py = y + 20
         for p_label in planets:
             draw.text((x + 3, py), p_label, fill="darkblue", font=planet_font)
-            py += 13
+            py += 16
 
     buf = io.BytesIO()
     img.save(buf, format="PNG")
@@ -202,12 +254,13 @@ def _safe_center(pts):
 
 
 def generate_north_indian_chart(chart_data, title="Rasi Chart", size=600,
-                                label_mode="degrees"):
-    """North Indian style — SS dark theme.
+                                label_mode="degrees", theme="light", start_sign=None,
+                                language="en"):
+    """North Indian style chart.
 
-    Houses are fixed (H1=bottom-center, anti-clockwise to H12).
-    Lagna sign rotates into H1. Each cell shows its house number once (gold),
-    then planets as: degree on top line, abbreviation on next line (white).
+    theme: "light" (white bg) or "dark" (black bg, yellow lines, white text).
+    start_sign: 1-based sign number to force into House 1 (overrides auto-detect).
+    language: "en" or "hi" — switches planet/sign abbreviations to Hindi.
     """
     margin = 30
     title_height = 44
@@ -215,20 +268,29 @@ def generate_north_indian_chart(chart_data, title="Rasi Chart", size=600,
     img_w = size
     img_h = size + title_height
 
-    BG           = (255, 255, 255) # White background
-    COLOR_LINE   = (255, 180, 0)   # Yellow lines
-    COLOR_SIGN   = (255, 0, 0)     # Red sign numbers
-    COLOR_PLANET = (0, 0, 139)     # DarkBlue planets
-    COLOR_DEGREE = (0, 0, 0)       # Black degrees
-    COLOR_TITLE  = (0, 0, 0)       # Black title
+    if theme == "dark":
+        BG           = (0, 0, 0)        # Black background
+        COLOR_LINE   = (255, 180, 0)    # Yellow lines
+        COLOR_SIGN   = (255, 180, 0)    # Gold house numbers
+        COLOR_PLANET = (255, 255, 255)  # White planets
+        COLOR_DEGREE = (255, 255, 255)  # White degrees
+        COLOR_TITLE  = (255, 255, 255)  # White title
+    else:
+        BG           = (255, 255, 255)  # White background
+        COLOR_LINE   = (255, 180, 0)    # Yellow lines
+        COLOR_SIGN   = (255, 0, 0)      # Red sign numbers
+        COLOR_PLANET = (0, 0, 139)      # DarkBlue planets
+        COLOR_DEGREE = (0, 0, 0)        # Black degrees
+        COLOR_TITLE  = (0, 0, 0)        # Black title
 
     img = Image.new("RGB", (img_w, img_h), BG)
     draw = ImageDraw.Draw(img)
 
-    title_font  = _try_load_font(18)
-    num_font    = _try_load_font(14)
-    deg_font    = _try_load_font(11)
-    planet_font = _try_load_font(13)
+    _font = _try_load_devanagari_font if language == "hi" else _try_load_font
+    title_font  = _font(22)
+    num_font    = _font(18)
+    deg_font    = _font(14)
+    planet_font = _font(16)
 
     bbox = draw.textbbox((0, 0), title, font=title_font)
     tw = bbox[2] - bbox[0]
@@ -283,30 +345,30 @@ def generate_north_indian_chart(chart_data, title="Rasi Chart", size=600,
     elif title and "Sun" in title:
         ref_name = "Sun"
 
-    # Find the starting sign for House 1
-    start_sign = 1
-    for entry in chart_data:
-        p_name = entry.get("planet", "").lower()
-        p_id = str(entry.get("planet_id", "")).lower()
-        if p_name == ref_name.lower() or p_id == ref_name[0].lower() or (ref_name == "Lagna" and (p_name == "as" or p_id == "l")):
-            start_sign = int(entry["sign_number"])
-            break
+    # Find the starting sign for House 1 (use override if provided)
+    if start_sign is None:
+        start_sign = 1
+        for entry in chart_data:
+            p_name = entry.get("planet", "").lower()
+            p_id = str(entry.get("planet_id", "")).lower()
+            if p_name == ref_name.lower() or p_id == ref_name[0].lower() or (ref_name == "Lagna" and (p_name == "as" or p_id == "l")):
+                start_sign = int(entry["sign_number"])
+                break
 
     # Group planets by House (1-12)
     house_planets = {h: [] for h in range(1, 13)}
     for entry in chart_data:
         sign_num = int(entry["sign_number"])
         h = (sign_num - start_sign) % 12 + 1
-        
+
         p_name = entry.get("planet", "")
         p_id = str(entry.get("planet_id", ""))
         if p_name.lower() == ref_name.lower() or p_id.lower() == ref_name[0].lower():
-            # Label the reference planet as "La" (or its abbr) in House 1
-            abbr = "La" if ref_name == "Lagna" else PLANET_ABBR.get(ref_name, ref_name[:2])
+            abbr = _planet_abbr("Lagna" if ref_name == "Lagna" else ref_name, language)
             deg = float(entry.get("degrees", 0))
             house_planets[h].insert(0, (abbr, deg))
         else:
-            abbr = PLANET_ABBR.get(p_name, p_name[:2])
+            abbr = _planet_abbr(p_name, language)
             deg  = float(entry.get("degrees", 0))
             house_planets[h].append((abbr, deg))
 
@@ -386,7 +448,7 @@ def generate_north_indian_chart(chart_data, title="Rasi Chart", size=600,
 # ---------------------------------------------------------------------------
 
 def generate_bhava_chart(bhava_data, title="Bhava / Chalit Chart", size=600,
-                         label_mode="house", style="north"):
+                         label_mode="house", style="north", language="en"):
     """Render a bhava (chalit) chart in North or South Indian style.
     bhava_data: dict with 'houses' key — list of
       {house, sign, cusp_start, cusp_mid, cusp_end, planets, planet_ids}
@@ -416,14 +478,14 @@ def generate_bhava_chart(bhava_data, title="Bhava / Chalit Chart", size=600,
         cell["house"] = int(h["house"]) if cell["house"] is None else f"{cell['house']}/{int(h['house'])}"
         cell["cusp_mid"] = h.get("cusp_mid", cell["cusp_mid"])
         for p in h.get("planets", []):
-            cell["planets"].append(PLANET_ABBR.get(p, p[:2]))
+            cell["planets"].append(_planet_abbr(p, language))
 
     if style == "south":
-        return _bhava_south(cells, title=title, size=size, label_mode=label_mode)
-    return _bhava_north(cells, houses_list, title=title, size=size, label_mode=label_mode)
+        return _bhava_south(cells, title=title, size=size, label_mode=label_mode, language=language)
+    return _bhava_north(cells, houses_list, title=title, size=size, label_mode=label_mode, language=language)
 
 
-def _bhava_south(cells, title="Bhava / Chalit Chart", size=600, label_mode="house"):
+def _bhava_south(cells, title="Bhava / Chalit Chart", size=600, label_mode="house", language="en"):
     """South Indian fixed-sign grid for the bhava chart."""
     margin = 40
     title_height = 50
@@ -435,10 +497,11 @@ def _bhava_south(cells, title="Bhava / Chalit Chart", size=600, label_mode="hous
     img = Image.new("RGB", (img_w, img_h), "white")
     draw = ImageDraw.Draw(img)
 
-    title_font  = _try_load_font(18)
-    sign_font   = _try_load_font(11)
-    house_font  = _try_load_font(14)
-    planet_font = _try_load_font(11)
+    _font = _try_load_devanagari_font if language == "hi" else _try_load_font
+    title_font  = _font(22)
+    sign_font   = _font(14)
+    house_font  = _font(17)
+    planet_font = _font(14)
 
     bbox = draw.textbbox((0, 0), title, font=title_font)
     tw = bbox[2] - bbox[0]
@@ -462,7 +525,7 @@ def _bhava_south(cells, title="Bhava / Chalit Chart", size=600, label_mode="hous
         y = oy + row * cell_h
         cell = cells[sign_idx]
 
-        draw.text((x + 3, y + 2), SIGN_NAMES_SHORT[sign_idx], fill="red", font=sign_font)
+        draw.text((x + 3, y + 2), _sign_short(sign_idx, language), fill="red", font=sign_font)
 
         if cell["house"] is not None:
             if label_mode == "cusp" and cell["cusp_mid"] is not None:
@@ -490,7 +553,7 @@ def _bhava_south(cells, title="Bhava / Chalit Chart", size=600, label_mode="hous
 
 
 def _bhava_north(cells, houses_list, title="Bhava / Chalit Chart", size=600,
-                 label_mode="house"):
+                 label_mode="house", language="en"):
     """North Indian diamond layout for the bhava chart.
 
     Houses are fixed in the 12 diamond regions (same geometry as generate_north_indian_chart).
@@ -506,10 +569,11 @@ def _bhava_north(cells, houses_list, title="Bhava / Chalit Chart", size=600,
     img = Image.new("RGB", (img_w, img_h), "white")
     draw = ImageDraw.Draw(img)
 
-    title_font  = _try_load_font(18)
-    sign_font   = _try_load_font(10)
-    house_font  = _try_load_font(10)
-    planet_font = _try_load_font(10)
+    _font = _try_load_devanagari_font if language == "hi" else _try_load_font
+    title_font  = _font(22)
+    sign_font   = _font(14)
+    house_font  = _font(14)
+    planet_font = _font(14)
 
     bbox = draw.textbbox((0, 0), title, font=title_font)
     tw = bbox[2] - bbox[0]
@@ -572,12 +636,11 @@ def _bhava_north(cells, houses_list, title="Bhava / Chalit Chart", size=600,
         planets_to_draw = []
         is_lagna_house = False
         for p in h_entry.get("planets", []):
-            abbr = PLANET_ABBR.get(p, p[:2])
             if p in {"Lagna", "As", "L"}:
-                planets_to_draw.insert(0, "La")
+                planets_to_draw.insert(0, _planet_abbr("Lagna", language))
                 is_lagna_house = True
             else:
-                planets_to_draw.append(abbr)
+                planets_to_draw.append(_planet_abbr(p, language))
 
         region_data[h_num] = {
             "sign_idx": sign_idx,
@@ -687,7 +750,7 @@ def _bhava_north(cells, houses_list, title="Bhava / Chalit Chart", size=600,
 # ---------------------------------------------------------------------------
 
 def generate_chart_image(chart_data, chart_name="Rasi Chart", size=600,
-                         label_mode="degrees", style="north"):
+                         label_mode="degrees", style="north", language="en"):
     """Generate chart image bytes.
 
     Args:
@@ -696,14 +759,23 @@ def generate_chart_image(chart_data, chart_name="Rasi Chart", size=600,
         size: image size in pixels
         label_mode: "degrees" | "sign_number" | "both" | "none"
         style: "north" (default) | "south"
+        language: "en" (default) | "hi"
 
     Returns:
         PNG image as bytes
     """
     if style == "south":
         return generate_south_indian_chart(
-            chart_data, title=chart_name, size=size, label_mode=label_mode,
+            chart_data, title=chart_name, size=size, label_mode=label_mode, language=language,
         )
     return generate_north_indian_chart(
-        chart_data, title=chart_name, size=size, label_mode=label_mode,
+        chart_data, title=chart_name, size=size, label_mode=label_mode, language=language,
+    )
+
+
+def generate_gochar_chart_image(planets, ref_sign, title="Gochar", size=600, language="en"):
+    """Render a Gochar (Transit) chart."""
+    return generate_north_indian_chart(
+        planets, title=title, size=size,
+        label_mode="degrees", theme="light", start_sign=ref_sign, language=language,
     )

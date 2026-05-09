@@ -112,6 +112,35 @@ def extract_birth_params(body):
     }
 
 
+def extract_transit_params(body):
+    """Validate birth params + optional transit date fields.
+
+    Transit date defaults to current UTC time if not provided.
+    Transit location defaults to birth location.
+    """
+    birth = extract_birth_params(body)
+
+    now = datetime.utcnow()
+    t_year   = _as_int(body.get("transit_year",   now.year),   "transit_year",   1800, 2400)
+    t_month  = _as_int(body.get("transit_month",  now.month),  "transit_month",  1, 12)
+    t_day    = _as_int(body.get("transit_day",    now.day),    "transit_day",    1, 31)
+    t_hour   = _as_int(body.get("transit_hour",   now.hour),   "transit_hour",   0, 23)
+    t_minute = _as_int(body.get("transit_minute", now.minute), "transit_minute", 0, 59)
+
+    raw_tz = body.get("transit_timezone_offset", body.get("timezone_offset"))
+    t_tz_offset, _ = _resolve_timezone(raw_tz, t_year, t_month, t_day, t_hour, t_minute)
+
+    return {
+        **birth,
+        "transit_year": t_year,
+        "transit_month": t_month,
+        "transit_day": t_day,
+        "transit_hour": t_hour,
+        "transit_minute": t_minute,
+        "transit_timezone_offset": t_tz_offset,
+    }
+
+
 def extract_match_params(body):
     body = body or {}
     return {
