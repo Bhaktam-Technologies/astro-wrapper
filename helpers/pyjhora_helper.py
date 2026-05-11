@@ -456,6 +456,30 @@ def get_gochar(**params):
     }
 
 
+def get_kundali_summary(**params):
+    """Return rasi chart, navamsha (D9), retrograde, and combustion in one call."""
+    from jhora.horoscope.chart import charts as _charts
+    from jhora.panchanga import drik as _drik
+
+    place, dob, tob, jd = _build_inputs(**params)
+    rc = _charts.rasi_chart(jd, place)
+
+    rasi = _add_house_numbers([_format_planet_position(e) for e in rc])
+    navamsha_raw = _charts.navamsa_chart(rc, chart_method=1)
+    navamsha = _add_house_numbers([_format_planet_position(e) for e in navamsha_raw])
+
+    retro_indices = _drik.planets_in_retrograde(jd, place)
+    planet_positions = _charts.divisional_chart(jd, place)
+    combust_indices = _charts.planets_in_combustion(planet_positions)
+
+    return {
+        "rasi_chart": rasi,
+        "navamsha_chart": navamsha,
+        "retrograde": [_planet_label(p) for p in retro_indices],
+        "combustion": [_planet_label(p) for p in combust_indices],
+    }
+
+
 def get_divisional_chart(divisional_chart_factor, chart_method=1, **params):
     """Return a single divisional chart by factor."""
     place, dob, tob, jd = _build_inputs(**params)
