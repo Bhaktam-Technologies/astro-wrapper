@@ -287,10 +287,10 @@ def generate_north_indian_chart(chart_data, title="Rasi Chart", size=600,
     draw = ImageDraw.Draw(img)
 
     _font = _try_load_devanagari_font if language == "hi" else _try_load_font
-    title_font  = _font(22)
-    num_font    = _font(20)
-    deg_font    = _font(10)
-    planet_font = _font(18)
+    title_font  = _font(40)
+    num_font    = _font(35)
+    deg_font    = _font(20)
+    planet_font = _font(35)
 
     bbox = draw.textbbox((0, 0), title, font=title_font)
     tw = bbox[2] - bbox[0]
@@ -406,9 +406,9 @@ def generate_north_indian_chart(chart_data, title="Rasi Chart", size=600,
         sx, sy = _safe_center(pts)
 
         show_degrees = label_mode != "none"
-        line_h = 11 if show_degrees else 0
-        name_h = 13
-        spacing = 7
+        line_h = 24 if show_degrees else 0   # deg_font=20 + gap
+        name_h = 38                           # planet_font=35 + gap
+        spacing = 10
 
         # Two columns when 3+ planets to avoid vertical overflow in small cells
         if len(planets) >= 3:
