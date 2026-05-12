@@ -943,54 +943,145 @@ def _parse_vimsottari_raw(jd, place):
     return meta, data if isinstance(data, list) else []
 
 
+def _date_str(date_tuple):
+    y, m, d = int(date_tuple[0]), int(date_tuple[1]), int(date_tuple[2])
+    return f"{y:04d}-{m:02d}-{d:02d}"
+
+
+def _planet_key(lords, depth):
+    return tuple(_planet_label(lords[i]) for i in range(depth))
+
+
 def get_vimshottari_dasha(**params):
-    """Return all Mahadasha periods, each with its nested Antardasha list."""
+    """Return Mahadasha hierarchy nested 5 levels deep (Maha→Antar→Pratyantar→Sooksham→Pran)."""
     place, dob, tob, jd = _build_inputs(**params)
-    meta, data = _parse_vimsottari_raw(jd, place)
 
-    # Collect all entries as (maha_lord, date_str) to compute end dates
-    maha_map = {}
-    maha_order = []
-    antar_rows = []  # (maha_lord, antar_lord, date_str)
+    # Fetch raw meta from level-2 call (same as before)
+    _, meta_data = _parse_vimsottari_raw(jd, place)
+    vd0 = vimsottari.get_vimsottari_dhasa_bhukthi(jd, place)
+    meta = {}
+    if isinstance(vd0, (list, tuple)) and len(vd0) == 2 and isinstance(vd0[0], tuple):
+        t = vd0[0]
+        if len(t) == 3:
+            meta = {"nakshatra": int(t[0]), "pada": int(t[1]), "pada_index": int(t[2])}
+        elif len(t) >= 2:
+            meta = {"nakshatra": int(t[0]), "pada": int(t[1])}
 
-    for e in data:
+    # Fetch 5-level data
+    raw = vimsottari.get_vimsottari_dhasa_bhukthi(jd, place, dhasa_level_index=5)
+    if isinstance(raw, (list, tuple)) and len(raw) == 2 and isinstance(raw[0], tuple):
+        raw = raw[1]
+    if not isinstance(raw, list):
+        return {"meta": meta, "mahadasha": []}
+
+    # Parse all rows into flat list of (lords_tuple_of_5, date_str)
+    rows = []
+    for e in raw:
         if not (isinstance(e, (list, tuple)) and len(e) >= 2):
             continue
-        lords, date_tuple = e[0], e[1]
-        if not isinstance(lords, (list, tuple)) or len(lords) < 1:
+        lords, dt = e[0], e[1]
+        if not isinstance(lords, (list, tuple)) or len(lords) < 5:
             continue
-        maha_lord = _planet_label(lords[0])
-        y, m, d = int(date_tuple[0]), int(date_tuple[1]), int(date_tuple[2])
-        date_str = f"{y:04d}-{m:02d}-{d:02d}"
+        rows.append((tuple(_planet_label(lords[i]) for i in range(5)), _date_str(dt)))
 
-        if maha_lord not in maha_map:
-            maha_map[maha_lord] = {
-                "planet": maha_lord,
-                "planet_hi": PLANET_NAMES_HI.get(maha_lord),
-                "start_date": date_str, "end_date": None, "antardasha": [],
-            }
-            maha_order.append(maha_lord)
+    if not rows:
+        return {"meta": meta, "mahadasha": []}
 
-        if len(lords) >= 2:
-            antar_lord = _planet_label(lords[1])
-            antar_rows.append((maha_lord, antar_lord, date_str))
+    def _label(key):
+        return "/".join(key)
 
-    # Fill end_date of each mahadasha = start_date of the next one
-    for i, key in enumerate(maha_order):
-        if i + 1 < len(maha_order):
-            maha_map[key]["end_date"] = maha_map[maha_order[i + 1]]["start_date"]
+    def _label_hi(key):
+        return "/".join(PLANET_NAMES_HI.get(p, p) for p in key)
 
-    # Fill antardasha with end_date = start of next antardasha row
-    for i, (maha_lord, antar_lord, date_str) in enumerate(antar_rows):
-        end = antar_rows[i + 1][2] if i + 1 < len(antar_rows) else maha_map[maha_lord]["end_date"]
-        maha_map[maha_lord]["antardasha"].append({
-            "planet": f"{maha_lord}/{antar_lord}",
-            "planet_hi": f"{PLANET_NAMES_HI.get(maha_lord, maha_lord)}/{PLANET_NAMES_HI.get(antar_lord, antar_lord)}",
-            "start_date": date_str,
-            "end_date": end,
+    # Build nested structure bottom-up using ordered dicts keyed by lord tuples
+    from collections import OrderedDict
+
+    # Level maps: key = lords prefix tuple of length N
+    maha_map   = OrderedDict()  # key=(m,)
+    antar_map  = OrderedDict()  # key=(m,a)
+    praty_map  = OrderedDict()  # key=(m,a,p)
+    sooks_map  = OrderedDict()  # key=(m,a,p,s)
+    pran_list  = []             # list of (key5, date_str)
+
+    for lords5, date_str in rows:
+        k1 = lords5[:1]; k2 = lords5[:2]; k3 = lords5[:3]; k4 = lords5[:4]; k5 = lords5
+
+        if k1 not in maha_map:
+            maha_map[k1] = {"planet": _label(k1), "planet_hi": _label_hi(k1),
+                            "start_date": date_str, "end_date": None, "antardasha": []}
+        if k2 not in antar_map:
+            antar_map[k2] = {"planet": _label(k2), "planet_hi": _label_hi(k2),
+                             "start_date": date_str, "end_date": None, "pratyantar_dasha": []}
+        if k3 not in praty_map:
+            praty_map[k3] = {"planet": _label(k3), "planet_hi": _label_hi(k3),
+                             "start_date": date_str, "end_date": None, "sooksham_dasha": []}
+        if k4 not in sooks_map:
+            sooks_map[k4] = {"planet": _label(k4), "planet_hi": _label_hi(k4),
+                             "start_date": date_str, "end_date": None, "pran_dasha": []}
+        pran_list.append((k5, date_str))
+
+    # Assign end_dates — each period ends when the next sibling starts
+    def _fill_end_dates(ordered_keys, get_node, prefix_len, parent_end_fn):
+        keys = list(ordered_keys)
+        for i, k in enumerate(keys):
+            node = get_node(k)
+            if i + 1 < len(keys):
+                nk = keys[i + 1]
+                node["end_date"] = get_node(nk)["start_date"]
+            else:
+                node["end_date"] = parent_end_fn(k)
+
+    # Maha end dates (last one has no successor — leave None)
+    maha_keys = list(maha_map)
+    for i, k in enumerate(maha_keys):
+        if i + 1 < len(maha_keys):
+            maha_map[k]["end_date"] = maha_map[maha_keys[i + 1]]["start_date"]
+
+    # Antar end dates
+    antar_keys = list(antar_map)
+    for i, k in enumerate(antar_keys):
+        if i + 1 < len(antar_keys):
+            antar_map[k]["end_date"] = antar_map[antar_keys[i + 1]]["start_date"]
+        else:
+            antar_map[k]["end_date"] = maha_map[k[:1]]["end_date"]
+
+    # Pratyantar end dates
+    praty_keys = list(praty_map)
+    for i, k in enumerate(praty_keys):
+        if i + 1 < len(praty_keys):
+            praty_map[k]["end_date"] = praty_map[praty_keys[i + 1]]["start_date"]
+        else:
+            praty_map[k]["end_date"] = antar_map[k[:2]]["end_date"]
+
+    # Sooksham end dates
+    sooks_keys = list(sooks_map)
+    for i, k in enumerate(sooks_keys):
+        if i + 1 < len(sooks_keys):
+            sooks_map[k]["end_date"] = sooks_map[sooks_keys[i + 1]]["start_date"]
+        else:
+            sooks_map[k]["end_date"] = praty_map[k[:3]]["end_date"]
+
+    # Pran end dates & attach to sooksham
+    for i, (k5, date_str) in enumerate(pran_list):
+        end = pran_list[i + 1][1] if i + 1 < len(pran_list) else sooks_map[k5[:4]]["end_date"]
+        sooks_map[k5[:4]]["pran_dasha"].append({
+            "planet": _label(k5), "planet_hi": _label_hi(k5),
+            "start_date": date_str, "end_date": end,
         })
 
-    return {"meta": meta, "mahadasha": [maha_map[k] for k in maha_order]}
+    # Attach sooksham → pratyantar
+    for k4, node in sooks_map.items():
+        praty_map[k4[:3]]["sooksham_dasha"].append(node)
+
+    # Attach pratyantar → antar
+    for k3, node in praty_map.items():
+        antar_map[k3[:2]]["pratyantar_dasha"].append(node)
+
+    # Attach antar → maha
+    for k2, node in antar_map.items():
+        maha_map[k2[:1]]["antardasha"].append(node)
+
+    return {"meta": meta, "mahadasha": list(maha_map.values())}
 
 
 def get_yogini_dasa(**params):
