@@ -165,25 +165,19 @@ def generate_south_indian_chart(chart_data, title="Rasi Chart", size=600,
                                 label_mode="degrees", language="en"):
     """South Indian style: signs are fixed in cells, planets/lagna move."""
     margin = 40
-    title_height = 50
     img_w = size
-    img_h = size + title_height
+    img_h = size
     cell_w = (size - 2 * margin) // 4
     cell_h = (size - 2 * margin) // 4
 
-    img = Image.new("RGB", (img_w, img_h), "white")
+    img = Image.new("RGBA", (img_w, img_h), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
 
     _font = _try_load_devanagari_font if language == "hi" else _try_load_font
-    title_font  = _font(22)
     sign_font   = _font(14)
     planet_font = _font(13)
 
-    bbox = draw.textbbox((0, 0), title, font=title_font)
-    tw = bbox[2] - bbox[0]
-    draw.text(((img_w - tw) // 2, 10), title, fill="black", font=title_font)
-
-    ox, oy = margin, margin + title_height
+    ox, oy = margin, margin
     for r in range(5):
         y = oy + r * cell_h
         draw.line([(ox, y), (ox + 4 * cell_w, y)], fill="black", width=2)
@@ -263,41 +257,31 @@ def generate_north_indian_chart(chart_data, title="Rasi Chart", size=600,
     language: "en" or "hi" — switches planet/sign abbreviations to Hindi.
     """
     margin = 30
-    title_height = 44
     S = size - 2 * margin
     img_w = size
-    img_h = size + title_height
+    img_h = size
 
     if theme == "dark":
-        BG           = (0, 0, 0)        # Black background
         COLOR_LINE   = (255, 180, 0)    # Yellow lines
         COLOR_SIGN   = (255, 180, 0)    # Gold house numbers
         COLOR_PLANET = (255, 255, 255)  # White planets
         COLOR_DEGREE = (255, 255, 255)  # White degrees
-        COLOR_TITLE  = (255, 255, 255)  # White title
     else:
-        BG           = (255, 255, 255)  # White background
         COLOR_LINE   = (255, 180, 0)    # Yellow lines
         COLOR_SIGN   = (255, 0, 0)      # Red sign numbers
         COLOR_PLANET = (0, 0, 139)      # DarkBlue planets
         COLOR_DEGREE = (0, 0, 0)        # Black degrees
-        COLOR_TITLE  = (0, 0, 0)        # Black title
 
-    img = Image.new("RGB", (img_w, img_h), BG)
+    img = Image.new("RGBA", (img_w, img_h), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
 
     _font = _try_load_devanagari_font if language == "hi" else _try_load_font
-    title_font  = _font(22)
     num_font    = _font(20)
     deg_font    = _font(10)
     planet_font = _font(18)
 
-    bbox = draw.textbbox((0, 0), title, font=title_font)
-    tw = bbox[2] - bbox[0]
-    draw.text(((img_w - tw) // 2, 8), title, fill=COLOR_TITLE, font=title_font)
-
     ox = margin
-    oy = margin + title_height
+    oy = margin
 
     def pt(rx, ry):
         return (ox + int(rx * S), oy + int(ry * S))
@@ -488,26 +472,20 @@ def generate_bhava_chart(bhava_data, title="Bhava / Chalit Chart", size=600,
 def _bhava_south(cells, title="Bhava / Chalit Chart", size=600, label_mode="house", language="en"):
     """South Indian fixed-sign grid for the bhava chart."""
     margin = 40
-    title_height = 50
     img_w = size
-    img_h = size + title_height
+    img_h = size
     cell_w = (size - 2 * margin) // 4
     cell_h = (size - 2 * margin) // 4
 
-    img = Image.new("RGB", (img_w, img_h), "white")
+    img = Image.new("RGBA", (img_w, img_h), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
 
     _font = _try_load_devanagari_font if language == "hi" else _try_load_font
-    title_font  = _font(22)
     sign_font   = _font(14)
     house_font  = _font(17)
     planet_font = _font(14)
 
-    bbox = draw.textbbox((0, 0), title, font=title_font)
-    tw = bbox[2] - bbox[0]
-    draw.text(((img_w - tw) // 2, 10), title, fill="black", font=title_font)
-
-    ox, oy = margin, margin + title_height
+    ox, oy = margin, margin
     for r in range(5):
         y = oy + r * cell_h
         draw.line([(ox, y), (ox + 4 * cell_w, y)], fill="black", width=2)
@@ -561,26 +539,20 @@ def _bhava_north(cells, houses_list, title="Bhava / Chalit Chart", size=600,
     clockwise — identical rotation logic to the rasi North Indian renderer.
     """
     margin = 40
-    title_height = 50
     S = size - 2 * margin
     img_w = size
-    img_h = size + title_height
+    img_h = size
 
-    img = Image.new("RGB", (img_w, img_h), "white")
+    img = Image.new("RGBA", (img_w, img_h), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
 
     _font = _try_load_devanagari_font if language == "hi" else _try_load_font
-    title_font  = _font(22)
     sign_font   = _font(14)
     house_font  = _font(14)
     planet_font = _font(14)
 
-    bbox = draw.textbbox((0, 0), title, font=title_font)
-    tw = bbox[2] - bbox[0]
-    draw.text(((img_w - tw) // 2, 10), title, fill="black", font=title_font)
-
     ox = margin
-    oy = margin + title_height
+    oy = margin
 
     def pt(rx, ry):
         return (ox + int(rx * S), oy + int(ry * S))
