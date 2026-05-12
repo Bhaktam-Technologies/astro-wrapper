@@ -12,6 +12,8 @@ strengths and match. Fixes the old helper's bugs:
 """
 
 import swisseph as swe
+import functools
+from collections import OrderedDict
 
 from jhora import const, utils
 from jhora.panchanga import drik
@@ -952,62 +954,49 @@ def _planet_key(lords, depth):
     return tuple(_planet_label(lords[i]) for i in range(depth))
 
 
-def get_vimshottari_dasha(**params):
-    """Return Mahadasha hierarchy nested 5 levels deep (Maha→Antar→Pratyantar→Sooksham→Pran)."""
-    place, dob, tob, jd = _build_inputs(**params)
+@functools.lru_cache(maxsize=256)
+def _compute_vimshottari_dasha(jd, place):
+    """Cached — keyed by (jd, place). Birth charts are immutable so result never changes."""
+    raw = vimsottari.get_vimsottari_dhasa_bhukthi(jd, place, dhasa_level_index=5)
 
-    # Fetch raw meta from level-2 call (same as before)
-    _, meta_data = _parse_vimsottari_raw(jd, place)
-    vd0 = vimsottari.get_vimsottari_dhasa_bhukthi(jd, place)
+    # Extract meta from the first-tuple header
     meta = {}
-    if isinstance(vd0, (list, tuple)) and len(vd0) == 2 and isinstance(vd0[0], tuple):
-        t = vd0[0]
+    if isinstance(raw, (list, tuple)) and len(raw) == 2 and isinstance(raw[0], tuple):
+        t = raw[0]
         if len(t) == 3:
             meta = {"nakshatra": int(t[0]), "pada": int(t[1]), "pada_index": int(t[2])}
         elif len(t) >= 2:
             meta = {"nakshatra": int(t[0]), "pada": int(t[1])}
-
-    # Fetch 5-level data
-    raw = vimsottari.get_vimsottari_dhasa_bhukthi(jd, place, dhasa_level_index=5)
-    if isinstance(raw, (list, tuple)) and len(raw) == 2 and isinstance(raw[0], tuple):
         raw = raw[1]
+
     if not isinstance(raw, list):
         return {"meta": meta, "mahadasha": []}
 
-    # Parse all rows into flat list of (lords_tuple_of_5, date_str)
-    rows = []
+    # Pre-build planet label lookup to avoid repeated dict lookups inside the hot loop
+    pl_label = {k: _planet_label(k) for k in range(12)}
+    pl_hi = {pl_label[k]: PLANET_NAMES_HI.get(pl_label[k], pl_label[k]) for k in range(12)}
+
+    def _label(key): return "/".join(key)
+    def _label_hi(key): return "/".join(pl_hi.get(p, p) for p in key)
+
+    maha_map  = OrderedDict()
+    antar_map = OrderedDict()
+    praty_map = OrderedDict()
+    sooks_map = OrderedDict()
+    pran_list = []
+
     for e in raw:
         if not (isinstance(e, (list, tuple)) and len(e) >= 2):
             continue
         lords, dt = e[0], e[1]
         if not isinstance(lords, (list, tuple)) or len(lords) < 5:
             continue
-        rows.append((tuple(_planet_label(lords[i]) for i in range(5)), _date_str(dt)))
-
-    if not rows:
-        return {"meta": meta, "mahadasha": []}
-
-    def _label(key):
-        return "/".join(key)
-
-    def _label_hi(key):
-        return "/".join(PLANET_NAMES_HI.get(p, p) for p in key)
-
-    # Build nested structure bottom-up using ordered dicts keyed by lord tuples
-    from collections import OrderedDict
-
-    # Level maps: key = lords prefix tuple of length N
-    maha_map   = OrderedDict()  # key=(m,)
-    antar_map  = OrderedDict()  # key=(m,a)
-    praty_map  = OrderedDict()  # key=(m,a,p)
-    sooks_map  = OrderedDict()  # key=(m,a,p,s)
-    pran_list  = []             # list of (key5, date_str)
-
-    for lords5, date_str in rows:
-        k1 = lords5[:1]; k2 = lords5[:2]; k3 = lords5[:3]; k4 = lords5[:4]; k5 = lords5
+        lords5 = tuple(pl_label.get(lords[i], str(lords[i])) for i in range(5))
+        date_str = _date_str(dt)
+        k1 = lords5[:1]; k2 = lords5[:2]; k3 = lords5[:3]; k4 = lords5[:4]
 
         if k1 not in maha_map:
-            maha_map[k1] = {"planet": _label(k1), "planet_hi": _label_hi(k1),
+            maha_map[k1] = {"planet": k1[0], "planet_hi": pl_hi.get(k1[0], k1[0]),
                             "start_date": date_str, "end_date": None, "antardasha": []}
         if k2 not in antar_map:
             antar_map[k2] = {"planet": _label(k2), "planet_hi": _label_hi(k2),
@@ -1018,26 +1007,14 @@ def get_vimshottari_dasha(**params):
         if k4 not in sooks_map:
             sooks_map[k4] = {"planet": _label(k4), "planet_hi": _label_hi(k4),
                              "start_date": date_str, "end_date": None, "pran_dasha": []}
-        pran_list.append((k5, date_str))
+        pran_list.append((lords5, date_str))
 
-    # Assign end_dates — each period ends when the next sibling starts
-    def _fill_end_dates(ordered_keys, get_node, prefix_len, parent_end_fn):
-        keys = list(ordered_keys)
-        for i, k in enumerate(keys):
-            node = get_node(k)
-            if i + 1 < len(keys):
-                nk = keys[i + 1]
-                node["end_date"] = get_node(nk)["start_date"]
-            else:
-                node["end_date"] = parent_end_fn(k)
-
-    # Maha end dates (last one has no successor — leave None)
+    # Fill end_dates — next sibling's start, falling back to parent's end
     maha_keys = list(maha_map)
     for i, k in enumerate(maha_keys):
         if i + 1 < len(maha_keys):
             maha_map[k]["end_date"] = maha_map[maha_keys[i + 1]]["start_date"]
 
-    # Antar end dates
     antar_keys = list(antar_map)
     for i, k in enumerate(antar_keys):
         if i + 1 < len(antar_keys):
@@ -1045,7 +1022,6 @@ def get_vimshottari_dasha(**params):
         else:
             antar_map[k]["end_date"] = maha_map[k[:1]]["end_date"]
 
-    # Pratyantar end dates
     praty_keys = list(praty_map)
     for i, k in enumerate(praty_keys):
         if i + 1 < len(praty_keys):
@@ -1053,7 +1029,6 @@ def get_vimshottari_dasha(**params):
         else:
             praty_map[k]["end_date"] = antar_map[k[:2]]["end_date"]
 
-    # Sooksham end dates
     sooks_keys = list(sooks_map)
     for i, k in enumerate(sooks_keys):
         if i + 1 < len(sooks_keys):
@@ -1061,7 +1036,6 @@ def get_vimshottari_dasha(**params):
         else:
             sooks_map[k]["end_date"] = praty_map[k[:3]]["end_date"]
 
-    # Pran end dates & attach to sooksham
     for i, (k5, date_str) in enumerate(pran_list):
         end = pran_list[i + 1][1] if i + 1 < len(pran_list) else sooks_map[k5[:4]]["end_date"]
         sooks_map[k5[:4]]["pran_dasha"].append({
@@ -1069,19 +1043,20 @@ def get_vimshottari_dasha(**params):
             "start_date": date_str, "end_date": end,
         })
 
-    # Attach sooksham → pratyantar
     for k4, node in sooks_map.items():
         praty_map[k4[:3]]["sooksham_dasha"].append(node)
-
-    # Attach pratyantar → antar
     for k3, node in praty_map.items():
         antar_map[k3[:2]]["pratyantar_dasha"].append(node)
-
-    # Attach antar → maha
     for k2, node in antar_map.items():
         maha_map[k2[:1]]["antardasha"].append(node)
 
     return {"meta": meta, "mahadasha": list(maha_map.values())}
+
+
+def get_vimshottari_dasha(**params):
+    """Return Mahadasha hierarchy nested 5 levels deep (Maha→Antar→Pratyantar→Sooksham→Pran)."""
+    place, dob, tob, jd = _build_inputs(**params)
+    return _compute_vimshottari_dasha(jd, place)
 
 
 def get_yogini_dasa(**params):
