@@ -288,9 +288,9 @@ def generate_north_indian_chart(chart_data, title="Rasi Chart", size=600,
 
     _font = _try_load_devanagari_font if language == "hi" else _try_load_font
     title_font  = _font(22)
-    num_font    = _font(18)
-    deg_font    = _font(14)
-    planet_font = _font(16)
+    num_font    = _font(20)
+    deg_font    = _font(10)
+    planet_font = _font(18)
 
     bbox = draw.textbbox((0, 0), title, font=title_font)
     tw = bbox[2] - bbox[0]
