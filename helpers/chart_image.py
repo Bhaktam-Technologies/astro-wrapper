@@ -293,8 +293,8 @@ def generate_north_indian_chart(chart_data, title="Rasi Chart", size=600,
     draw = ImageDraw.Draw(img)
 
     _font = _try_load_devanagari_font if language == "hi" else _try_load_font
-    num_font        = _font(30)
-    BASE_PLANET_PT  = 30   # max planet font size
+    num_font        = _font(26)
+    BASE_PLANET_PT  = 26  # max planet font size
     BASE_DEG_PT     = 15   # max degree font size
 
     ox = margin
