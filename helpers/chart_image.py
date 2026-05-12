@@ -164,7 +164,7 @@ def _group_planets_by_sign(chart_data, label_mode="degrees", language="en"):
 def generate_south_indian_chart(chart_data, title="Rasi Chart", size=600,
                                 label_mode="degrees", language="en"):
     """South Indian style: signs are fixed in cells, planets/lagna move."""
-    margin = 40
+    margin = 0
     img_w = size
     img_h = size
     cell_w = (size - 2 * margin) // 4
@@ -256,7 +256,7 @@ def generate_north_indian_chart(chart_data, title="Rasi Chart", size=600,
     start_sign: 1-based sign number to force into House 1 (overrides auto-detect).
     language: "en" or "hi" — switches planet/sign abbreviations to Hindi.
     """
-    margin = 30
+    margin = 0
     S = size - 2 * margin
     img_w = size
     img_h = size
@@ -471,7 +471,7 @@ def generate_bhava_chart(bhava_data, title="Bhava / Chalit Chart", size=600,
 
 def _bhava_south(cells, title="Bhava / Chalit Chart", size=600, label_mode="house", language="en"):
     """South Indian fixed-sign grid for the bhava chart."""
-    margin = 40
+    margin = 0
     img_w = size
     img_h = size
     cell_w = (size - 2 * margin) // 4
@@ -538,7 +538,7 @@ def _bhava_north(cells, houses_list, title="Bhava / Chalit Chart", size=600,
     The Bhava-1 house determines which sign goes in region H1; subsequent signs follow
     clockwise — identical rotation logic to the rasi North Indian renderer.
     """
-    margin = 40
+    margin = 0
     S = size - 2 * margin
     img_w = size
     img_h = size
