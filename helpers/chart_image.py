@@ -222,6 +222,23 @@ def generate_south_indian_chart(chart_data, title="Rasi Chart", size=600,
 # Houses go clockwise from H1. Signs rotate; Lagna sign goes in H1.
 # ---------------------------------------------------------------------------
 
+def _polygon_inradius(pts, cx, cy):
+    """Minimum distance from (cx, cy) to any edge of the polygon — the largest
+    circle centred there that fits entirely inside."""
+    min_d = float("inf")
+    n = len(pts)
+    for i in range(n):
+        ax, ay = pts[i]
+        bx, by = pts[(i + 1) % n]
+        dx, dy = bx - ax, by - ay
+        length = (dx * dx + dy * dy) ** 0.5
+        if length == 0:
+            continue
+        d = abs(dx * (ay - cy) - dy * (ax - cx)) / length
+        min_d = min(min_d, d)
+    return min_d if min_d != float("inf") else 0
+
+
 def _centroid(pts):
     xs = [p[0] for p in pts]
     ys = [p[1] for p in pts]
@@ -276,9 +293,9 @@ def generate_north_indian_chart(chart_data, title="Rasi Chart", size=600,
     draw = ImageDraw.Draw(img)
 
     _font = _try_load_devanagari_font if language == "hi" else _try_load_font
-    num_font    = _font(30)
-    deg_font    = _font(15)
-    planet_font = _font(30)
+    num_font        = _font(30)
+    BASE_PLANET_PT  = 30   # max planet font size
+    BASE_DEG_PT     = 15   # max degree font size
 
     ox = margin
     oy = margin
@@ -388,38 +405,67 @@ def generate_north_indian_chart(chart_data, title="Rasi Chart", size=600,
             continue
 
         sx, sy = _safe_center(pts)
-
         show_degrees = label_mode != "none"
-        line_h = 11 if show_degrees else 0
-        name_h = 18
-        spacing = 35
 
-        # Two columns when 3+ planets to avoid vertical overflow in small cells
-        if len(planets) >= 3:
+        # Auto-scale font so all planets fit within the inscribed circle
+        inradius = _polygon_inradius(pts, sx, sy)
+        avail_h = inradius * 1.8   # usable vertical span (slightly less than diameter)
+        avail_w = inradius * 1.8   # usable horizontal span
+
+        use_two_cols = len(planets) >= 3
+        col_count = 2 if use_two_cols else 1
+        rows = (len(planets) + 1) // 2 if use_two_cols else len(planets)
+
+        # Binary-search for the largest font that fits
+        lo, hi = 6, BASE_PLANET_PT
+        planet_pt = lo
+        while lo <= hi:
+            mid = (lo + hi) // 2
+            pf = _font(mid)
+            # measure tallest planet label
+            max_pw = max(draw.textbbox((0, 0), a, font=pf)[2] for a, _ in planets)
+            max_ph = max(draw.textbbox((0, 0), a, font=pf)[3] for a, _ in planets)
+            spacing = max(2, mid // 4)
+            block_h = rows * (max_ph + spacing)
+            block_w = col_count * (max_pw + (mid // 2 if show_degrees else 0) + 4)
+            if block_h <= avail_h and block_w <= avail_w:
+                planet_pt = mid
+                lo = mid + 1
+            else:
+                hi = mid - 1
+
+        p_font = _font(planet_pt)
+        d_font = _font(max(6, planet_pt // 2))
+
+        def _draw_planet_row(cx, ty, abbr, deg):
+            pbbox = draw.textbbox((0, 0), abbr, font=p_font)
+            pw, ph = pbbox[2] - pbbox[0], pbbox[3] - pbbox[1]
+            x0 = cx - pw / 2
+            draw.text((x0, ty), abbr, fill=COLOR_PLANET, font=p_font)
+            if show_degrees:
+                deg_str = f"{int(round(deg)):02d}"
+                dbbox = draw.textbbox((0, 0), deg_str, font=d_font)
+                dh = dbbox[3] - dbbox[1]
+                draw.text((x0 + pw + 2, ty - dh // 2), deg_str, fill=COLOR_DEGREE, font=d_font)
+
+        spacing = max(2, planet_pt // 4)
+        if use_two_cols:
             col_size = (len(planets) + 1) // 2
-            block_h = col_size * (line_h + name_h + spacing)
+            max_ph = max(draw.textbbox((0, 0), a, font=p_font)[3] for a, _ in planets)
+            block_h = col_size * (max_ph + spacing)
             for i, (abbr, deg) in enumerate(planets):
                 col = 0 if i < col_size else 1
                 row = i if i < col_size else i - col_size
-                tx = sx - 15 if col == 0 else sx + 15
-                ty = sy - block_h / 2 + row * (line_h + name_h + spacing)
-                if show_degrees:
-                    deg_str = f"{int(round(deg)):02d}"
-                    dbbox = draw.textbbox((0, 0), deg_str, font=deg_font)
-                    draw.text((tx - (dbbox[2]-dbbox[0])/2, ty), deg_str, fill=COLOR_DEGREE, font=deg_font)
-                pbbox = draw.textbbox((0, 0), abbr, font=planet_font)
-                draw.text((tx - (pbbox[2]-pbbox[0])/2, ty + line_h), abbr, fill=COLOR_PLANET, font=planet_font)
+                tx = sx - inradius * 0.3 if col == 0 else sx + inradius * 0.3
+                ty = sy - block_h / 2 + row * (max_ph + spacing)
+                _draw_planet_row(tx, ty, abbr, deg)
         else:
-            block_h = len(planets) * (line_h + name_h + spacing)
+            max_ph = max(draw.textbbox((0, 0), a, font=p_font)[3] for a, _ in planets)
+            block_h = len(planets) * (max_ph + spacing)
             ty = sy - block_h / 2
             for abbr, deg in planets:
-                if show_degrees:
-                    deg_str = f"{int(round(deg)):02d}"
-                    dbbox = draw.textbbox((0, 0), deg_str, font=deg_font)
-                    draw.text((sx - (dbbox[2]-dbbox[0])/2, ty), deg_str, fill=COLOR_DEGREE, font=deg_font)
-                pbbox = draw.textbbox((0, 0), abbr, font=planet_font)
-                draw.text((sx - (pbbox[2]-pbbox[0])/2, ty + line_h), abbr, fill=COLOR_PLANET, font=planet_font)
-                ty += line_h + name_h + spacing
+                _draw_planet_row(sx, ty, abbr, deg)
+                ty += max_ph + spacing
 
     buf = io.BytesIO()
     img.save(buf, format="PNG")
