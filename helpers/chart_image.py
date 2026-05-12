@@ -209,7 +209,7 @@ def generate_south_indian_chart(chart_data, title="Rasi Chart", size=600,
         py = y + 20
         for p_label in planets:
             draw.text((x + 3, py), p_label, fill="darkblue", font=planet_font)
-            py += 16
+            py += 20
 
     buf = io.BytesIO()
     img.save(buf, format="PNG")
@@ -408,7 +408,7 @@ def generate_north_indian_chart(chart_data, title="Rasi Chart", size=600,
         show_degrees = label_mode != "none"
         line_h = 11 if show_degrees else 0
         name_h = 13
-        spacing = 2
+        spacing = 7
 
         # Two columns when 3+ planets to avoid vertical overflow in small cells
         if len(planets) >= 3:
@@ -544,7 +544,7 @@ def _bhava_south(cells, title="Bhava / Chalit Chart", size=600, label_mode="hous
         py = y + 20
         for p_abbr in cell["planets"]:
             draw.text((x + 3, py), p_abbr, fill="darkblue", font=planet_font)
-            py += 14
+            py += 18
 
     buf = io.BytesIO()
     img.save(buf, format="PNG")
@@ -705,13 +705,14 @@ def _bhava_north(cells, houses_list, title="Bhava / Chalit Chart", size=600,
         # Layout calculations
         planet_lines = [l for l in lines if l[0] == "planet"]
         other_lines = [l for l in lines if l[0] != "planet"]
+        _lh = 18  # line height — extra room for Devanagari matras
         planet_rows = (len(planet_lines) + 1) // 2 if len(planet_lines) > 4 else len(planet_lines)
-        total_h = (len(other_lines) + planet_rows) * 14
-        
+        total_h = (len(other_lines) + planet_rows) * _lh
+
         shift_factor = 0.18
         inner_x = cx_c + (outer[0] - cx_c) * shift_factor
         inner_y = cy_c + (outer[1] - cy_c) * shift_factor
-        
+
         current_y = inner_y - total_h / 2
         color_map = {"sign": "darkred", "planet": "darkblue"}
         font_map  = {"sign": sign_font,  "planet": planet_font}
@@ -720,7 +721,7 @@ def _bhava_north(cells, houses_list, title="Bhava / Chalit Chart", size=600,
             f = font_map[kind]
             bb = draw.textbbox((0, 0), text, font=f)
             draw.text((inner_x - (bb[2]-bb[0])/2, current_y), text, fill=color_map[kind], font=f)
-            current_y += 14
+            current_y += _lh
 
         if len(planet_lines) > 4:
             col_size = (len(planet_lines) + 1) // 2
@@ -729,7 +730,7 @@ def _bhava_north(cells, houses_list, title="Bhava / Chalit Chart", size=600,
                 col = 0 if i < col_size else 1
                 row = i if i < col_size else i - col_size
                 tx = inner_x - 16 if col == 0 else inner_x + 16
-                ty = current_y + row * 14
+                ty = current_y + row * _lh
                 bb = draw.textbbox((0, 0), p_text, font=planet_font)
                 draw.text((tx - (bb[2]-bb[0])/2, ty), p_text, fill=color_map["planet"], font=planet_font)
         else:
@@ -737,7 +738,7 @@ def _bhava_north(cells, houses_list, title="Bhava / Chalit Chart", size=600,
                 f = font_map[kind]
                 bb = draw.textbbox((0, 0), text, font=f)
                 draw.text((inner_x - (bb[2]-bb[0])/2, current_y), text, fill=color_map[kind], font=f)
-                current_y += 14
+                current_y += _lh
 
     buf = io.BytesIO()
     img.save(buf, format="PNG")
