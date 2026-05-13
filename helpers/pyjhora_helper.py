@@ -12,6 +12,8 @@ strengths and match. Fixes the old helper's bugs:
 """
 
 import swisseph as swe
+import functools
+from collections import OrderedDict
 
 from jhora import const, utils
 from jhora.panchanga import drik
@@ -453,6 +455,30 @@ def get_gochar(**params):
             "natal_moon": _lagna_detail(natal_moon_entry),
             "planets": _map_to_chart(transit_planets, natal_moon_sign),
         },
+    }
+
+
+def get_kundali_summary(**params):
+    """Return rasi chart, navamsha (D9), retrograde, and combustion in one call."""
+    from jhora.horoscope.chart import charts as _charts
+    from jhora.panchanga import drik as _drik
+
+    place, dob, tob, jd = _build_inputs(**params)
+    rc = _charts.rasi_chart(jd, place)
+
+    rasi = _add_house_numbers([_format_planet_position(e) for e in rc])
+    navamsha_raw = _charts.navamsa_chart(rc, chart_method=1)
+    navamsha = _add_house_numbers([_format_planet_position(e) for e in navamsha_raw])
+
+    retro_indices = _drik.planets_in_retrograde(jd, place)
+    planet_positions = _charts.divisional_chart(jd, place)
+    combust_indices = _charts.planets_in_combustion(planet_positions)
+
+    return {
+        "rasi_chart": rasi,
+        "navamsha_chart": navamsha,
+        "retrograde": [_planet_label(p) for p in retro_indices],
+        "combustion": [_planet_label(p) for p in combust_indices],
     }
 
 
@@ -919,54 +945,118 @@ def _parse_vimsottari_raw(jd, place):
     return meta, data if isinstance(data, list) else []
 
 
-def get_vimshottari_dasha(**params):
-    """Return all Mahadasha periods, each with its nested Antardasha list."""
-    place, dob, tob, jd = _build_inputs(**params)
-    meta, data = _parse_vimsottari_raw(jd, place)
+def _date_str(date_tuple):
+    y, m, d = int(date_tuple[0]), int(date_tuple[1]), int(date_tuple[2])
+    return f"{y:04d}-{m:02d}-{d:02d}"
 
-    # Collect all entries as (maha_lord, date_str) to compute end dates
-    maha_map = {}
-    maha_order = []
-    antar_rows = []  # (maha_lord, antar_lord, date_str)
 
-    for e in data:
+def _planet_key(lords, depth):
+    return tuple(_planet_label(lords[i]) for i in range(depth))
+
+
+@functools.lru_cache(maxsize=256)
+def _compute_vimshottari_dasha(jd, place):
+    """Cached — keyed by (jd, place). Birth charts are immutable so result never changes."""
+    raw = vimsottari.get_vimsottari_dhasa_bhukthi(jd, place, dhasa_level_index=5)
+
+    # Extract meta from the first-tuple header
+    meta = {}
+    if isinstance(raw, (list, tuple)) and len(raw) == 2 and isinstance(raw[0], tuple):
+        t = raw[0]
+        if len(t) == 3:
+            meta = {"nakshatra": int(t[0]), "pada": int(t[1]), "pada_index": int(t[2])}
+        elif len(t) >= 2:
+            meta = {"nakshatra": int(t[0]), "pada": int(t[1])}
+        raw = raw[1]
+
+    if not isinstance(raw, list):
+        return {"meta": meta, "mahadasha": []}
+
+    # Pre-build planet label lookup to avoid repeated dict lookups inside the hot loop
+    pl_label = {k: _planet_label(k) for k in range(12)}
+    pl_hi = {pl_label[k]: PLANET_NAMES_HI.get(pl_label[k], pl_label[k]) for k in range(12)}
+
+    def _label(key): return "/".join(key)
+    def _label_hi(key): return "/".join(pl_hi.get(p, p) for p in key)
+
+    maha_map  = OrderedDict()
+    antar_map = OrderedDict()
+    praty_map = OrderedDict()
+    sooks_map = OrderedDict()
+    pran_list = []
+
+    for e in raw:
         if not (isinstance(e, (list, tuple)) and len(e) >= 2):
             continue
-        lords, date_tuple = e[0], e[1]
-        if not isinstance(lords, (list, tuple)) or len(lords) < 1:
+        lords, dt = e[0], e[1]
+        if not isinstance(lords, (list, tuple)) or len(lords) < 5:
             continue
-        maha_lord = _planet_label(lords[0])
-        y, m, d = int(date_tuple[0]), int(date_tuple[1]), int(date_tuple[2])
-        date_str = f"{y:04d}-{m:02d}-{d:02d}"
+        lords5 = tuple(pl_label.get(lords[i], str(lords[i])) for i in range(5))
+        date_str = _date_str(dt)
+        k1 = lords5[:1]; k2 = lords5[:2]; k3 = lords5[:3]; k4 = lords5[:4]
 
-        if maha_lord not in maha_map:
-            maha_map[maha_lord] = {
-                "planet": maha_lord,
-                "planet_hi": PLANET_NAMES_HI.get(maha_lord),
-                "start_date": date_str, "end_date": None, "antardasha": [],
-            }
-            maha_order.append(maha_lord)
+        if k1 not in maha_map:
+            maha_map[k1] = {"planet": k1[0], "planet_hi": pl_hi.get(k1[0], k1[0]),
+                            "start_date": date_str, "end_date": None, "antardasha": []}
+        if k2 not in antar_map:
+            antar_map[k2] = {"planet": _label(k2), "planet_hi": _label_hi(k2),
+                             "start_date": date_str, "end_date": None, "pratyantar_dasha": []}
+        if k3 not in praty_map:
+            praty_map[k3] = {"planet": _label(k3), "planet_hi": _label_hi(k3),
+                             "start_date": date_str, "end_date": None, "sooksham_dasha": []}
+        if k4 not in sooks_map:
+            sooks_map[k4] = {"planet": _label(k4), "planet_hi": _label_hi(k4),
+                             "start_date": date_str, "end_date": None, "pran_dasha": []}
+        pran_list.append((lords5, date_str))
 
-        if len(lords) >= 2:
-            antar_lord = _planet_label(lords[1])
-            antar_rows.append((maha_lord, antar_lord, date_str))
+    # Fill end_dates — next sibling's start, falling back to parent's end
+    maha_keys = list(maha_map)
+    for i, k in enumerate(maha_keys):
+        if i + 1 < len(maha_keys):
+            maha_map[k]["end_date"] = maha_map[maha_keys[i + 1]]["start_date"]
 
-    # Fill end_date of each mahadasha = start_date of the next one
-    for i, key in enumerate(maha_order):
-        if i + 1 < len(maha_order):
-            maha_map[key]["end_date"] = maha_map[maha_order[i + 1]]["start_date"]
+    antar_keys = list(antar_map)
+    for i, k in enumerate(antar_keys):
+        if i + 1 < len(antar_keys):
+            antar_map[k]["end_date"] = antar_map[antar_keys[i + 1]]["start_date"]
+        else:
+            antar_map[k]["end_date"] = maha_map[k[:1]]["end_date"]
 
-    # Fill antardasha with end_date = start of next antardasha row
-    for i, (maha_lord, antar_lord, date_str) in enumerate(antar_rows):
-        end = antar_rows[i + 1][2] if i + 1 < len(antar_rows) else maha_map[maha_lord]["end_date"]
-        maha_map[maha_lord]["antardasha"].append({
-            "planet": f"{maha_lord}/{antar_lord}",
-            "planet_hi": f"{PLANET_NAMES_HI.get(maha_lord, maha_lord)}/{PLANET_NAMES_HI.get(antar_lord, antar_lord)}",
-            "start_date": date_str,
-            "end_date": end,
+    praty_keys = list(praty_map)
+    for i, k in enumerate(praty_keys):
+        if i + 1 < len(praty_keys):
+            praty_map[k]["end_date"] = praty_map[praty_keys[i + 1]]["start_date"]
+        else:
+            praty_map[k]["end_date"] = antar_map[k[:2]]["end_date"]
+
+    sooks_keys = list(sooks_map)
+    for i, k in enumerate(sooks_keys):
+        if i + 1 < len(sooks_keys):
+            sooks_map[k]["end_date"] = sooks_map[sooks_keys[i + 1]]["start_date"]
+        else:
+            sooks_map[k]["end_date"] = praty_map[k[:3]]["end_date"]
+
+    for i, (k5, date_str) in enumerate(pran_list):
+        end = pran_list[i + 1][1] if i + 1 < len(pran_list) else sooks_map[k5[:4]]["end_date"]
+        sooks_map[k5[:4]]["pran_dasha"].append({
+            "planet": _label(k5), "planet_hi": _label_hi(k5),
+            "start_date": date_str, "end_date": end,
         })
 
-    return {"meta": meta, "mahadasha": [maha_map[k] for k in maha_order]}
+    for k4, node in sooks_map.items():
+        praty_map[k4[:3]]["sooksham_dasha"].append(node)
+    for k3, node in praty_map.items():
+        antar_map[k3[:2]]["pratyantar_dasha"].append(node)
+    for k2, node in antar_map.items():
+        maha_map[k2[:1]]["antardasha"].append(node)
+
+    return {"meta": meta, "mahadasha": list(maha_map.values())}
+
+
+def get_vimshottari_dasha(**params):
+    """Return Mahadasha hierarchy nested 5 levels deep (Maha→Antar→Pratyantar→Sooksham→Pran)."""
+    place, dob, tob, jd = _build_inputs(**params)
+    return _compute_vimshottari_dasha(jd, place)
 
 
 def get_yogini_dasa(**params):

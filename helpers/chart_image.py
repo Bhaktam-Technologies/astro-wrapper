@@ -82,10 +82,23 @@ SIGN_NAMES_SHORT_HI = [
 
 def _try_load_font(size):
     font_paths = [
+        # macOS
         "/System/Library/Fonts/Helvetica.ttc",
         "/System/Library/Fonts/SFNSMono.ttf",
+        "/Library/Fonts/Arial.ttf",
+        # Linux — DejaVu (most distros)
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
         "/usr/share/fonts/TTF/DejaVuSans.ttf",
+        "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+        # Linux — Liberation / FreeSans (common Docker images)
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/liberation/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+        "/usr/share/fonts/freefont/FreeSans.ttf",
+        # Linux — Noto (Ubuntu/Debian)
+        "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
+        "/usr/share/fonts/noto/NotoSans-Regular.ttf",
+        "/usr/share/fonts/opentype/noto/NotoSans-Regular.ttf",
     ]
     for path in font_paths:
         try:
@@ -164,26 +177,20 @@ def _group_planets_by_sign(chart_data, label_mode="degrees", language="en"):
 def generate_south_indian_chart(chart_data, title="Rasi Chart", size=600,
                                 label_mode="degrees", language="en"):
     """South Indian style: signs are fixed in cells, planets/lagna move."""
-    margin = 40
-    title_height = 50
+    margin = 0
     img_w = size
-    img_h = size + title_height
+    img_h = size
     cell_w = (size - 2 * margin) // 4
     cell_h = (size - 2 * margin) // 4
 
-    img = Image.new("RGB", (img_w, img_h), "white")
+    img = Image.new("RGBA", (img_w, img_h), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
 
     _font = _try_load_devanagari_font if language == "hi" else _try_load_font
-    title_font  = _font(22)
     sign_font   = _font(14)
     planet_font = _font(13)
 
-    bbox = draw.textbbox((0, 0), title, font=title_font)
-    tw = bbox[2] - bbox[0]
-    draw.text(((img_w - tw) // 2, 10), title, fill="black", font=title_font)
-
-    ox, oy = margin, margin + title_height
+    ox, oy = margin, margin
     for r in range(5):
         y = oy + r * cell_h
         draw.line([(ox, y), (ox + 4 * cell_w, y)], fill="black", width=2)
@@ -209,7 +216,7 @@ def generate_south_indian_chart(chart_data, title="Rasi Chart", size=600,
         py = y + 20
         for p_label in planets:
             draw.text((x + 3, py), p_label, fill="darkblue", font=planet_font)
-            py += 16
+            py += 20
 
     buf = io.BytesIO()
     img.save(buf, format="PNG")
@@ -227,6 +234,23 @@ def generate_south_indian_chart(chart_data, title="Rasi Chart", size=600,
 #   8 corner triangles (2 per corner) → H2–H3, H5–H6, H8–H9, H11–H12
 # Houses go clockwise from H1. Signs rotate; Lagna sign goes in H1.
 # ---------------------------------------------------------------------------
+
+def _polygon_inradius(pts, cx, cy):
+    """Minimum distance from (cx, cy) to any edge of the polygon — the largest
+    circle centred there that fits entirely inside."""
+    min_d = float("inf")
+    n = len(pts)
+    for i in range(n):
+        ax, ay = pts[i]
+        bx, by = pts[(i + 1) % n]
+        dx, dy = bx - ax, by - ay
+        length = (dx * dx + dy * dy) ** 0.5
+        if length == 0:
+            continue
+        d = abs(dx * (ay - cy) - dy * (ax - cx)) / length
+        min_d = min(min_d, d)
+    return min_d if min_d != float("inf") else 0
+
 
 def _centroid(pts):
     xs = [p[0] for p in pts]
@@ -262,42 +286,32 @@ def generate_north_indian_chart(chart_data, title="Rasi Chart", size=600,
     start_sign: 1-based sign number to force into House 1 (overrides auto-detect).
     language: "en" or "hi" — switches planet/sign abbreviations to Hindi.
     """
-    margin = 30
-    title_height = 44
+    margin = 0
     S = size - 2 * margin
     img_w = size
-    img_h = size + title_height
+    img_h = size
 
     if theme == "dark":
-        BG           = (0, 0, 0)        # Black background
         COLOR_LINE   = (255, 180, 0)    # Yellow lines
         COLOR_SIGN   = (255, 180, 0)    # Gold house numbers
         COLOR_PLANET = (255, 255, 255)  # White planets
         COLOR_DEGREE = (255, 255, 255)  # White degrees
-        COLOR_TITLE  = (255, 255, 255)  # White title
     else:
-        BG           = (255, 255, 255)  # White background
         COLOR_LINE   = (255, 180, 0)    # Yellow lines
         COLOR_SIGN   = (255, 0, 0)      # Red sign numbers
         COLOR_PLANET = (0, 0, 139)      # DarkBlue planets
         COLOR_DEGREE = (0, 0, 0)        # Black degrees
-        COLOR_TITLE  = (0, 0, 0)        # Black title
 
-    img = Image.new("RGB", (img_w, img_h), BG)
+    img = Image.new("RGBA", (img_w, img_h), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
 
     _font = _try_load_devanagari_font if language == "hi" else _try_load_font
-    title_font  = _font(22)
-    num_font    = _font(18)
-    deg_font    = _font(14)
-    planet_font = _font(16)
-
-    bbox = draw.textbbox((0, 0), title, font=title_font)
-    tw = bbox[2] - bbox[0]
-    draw.text(((img_w - tw) // 2, 8), title, fill=COLOR_TITLE, font=title_font)
+    num_font        = _font(24)
+    BASE_PLANET_PT  = 24  # max planet font size
+    BASE_DEG_PT     = 15   # max degree font size
 
     ox = margin
-    oy = margin + title_height
+    oy = margin
 
     def pt(rx, ry):
         return (ox + int(rx * S), oy + int(ry * S))
@@ -404,38 +418,67 @@ def generate_north_indian_chart(chart_data, title="Rasi Chart", size=600,
             continue
 
         sx, sy = _safe_center(pts)
-
         show_degrees = label_mode != "none"
-        line_h = 11 if show_degrees else 0
-        name_h = 13
-        spacing = 2
 
-        # Two columns when 3+ planets to avoid vertical overflow in small cells
-        if len(planets) >= 3:
+        # Auto-scale font so all planets fit within the inscribed circle
+        inradius = _polygon_inradius(pts, sx, sy)
+        avail_h = inradius * 1.8   # usable vertical span (slightly less than diameter)
+        avail_w = inradius * 1.8   # usable horizontal span
+
+        use_two_cols = len(planets) >= 3
+        col_count = 2 if use_two_cols else 1
+        rows = (len(planets) + 1) // 2 if use_two_cols else len(planets)
+
+        # Binary-search for the largest font that fits
+        lo, hi = 6, BASE_PLANET_PT
+        planet_pt = lo
+        while lo <= hi:
+            mid = (lo + hi) // 2
+            pf = _font(mid)
+            # measure tallest planet label
+            max_pw = max(draw.textbbox((0, 0), a, font=pf)[2] for a, _ in planets)
+            max_ph = max(draw.textbbox((0, 0), a, font=pf)[3] for a, _ in planets)
+            spacing = max(2, mid // 4)
+            block_h = rows * (max_ph + spacing)
+            block_w = col_count * (max_pw + (mid // 2 if show_degrees else 0) + 4)
+            if block_h <= avail_h and block_w <= avail_w:
+                planet_pt = mid
+                lo = mid + 1
+            else:
+                hi = mid - 1
+
+        p_font = _font(planet_pt)
+        d_font = _font(max(6, planet_pt // 2))
+
+        def _draw_planet_row(cx, ty, abbr, deg):
+            pbbox = draw.textbbox((0, 0), abbr, font=p_font)
+            pw, ph = pbbox[2] - pbbox[0], pbbox[3] - pbbox[1]
+            x0 = cx - pw / 2
+            draw.text((x0, ty), abbr, fill=COLOR_PLANET, font=p_font)
+            if show_degrees:
+                deg_str = f"{int(round(deg)):02d}"
+                dbbox = draw.textbbox((0, 0), deg_str, font=d_font)
+                dh = dbbox[3] - dbbox[1]
+                draw.text((x0 + pw + 2, ty - dh // 2), deg_str, fill=COLOR_DEGREE, font=d_font)
+
+        spacing = max(2, planet_pt // 4)
+        if use_two_cols:
             col_size = (len(planets) + 1) // 2
-            block_h = col_size * (line_h + name_h + spacing)
+            max_ph = max(draw.textbbox((0, 0), a, font=p_font)[3] for a, _ in planets)
+            block_h = col_size * (max_ph + spacing)
             for i, (abbr, deg) in enumerate(planets):
                 col = 0 if i < col_size else 1
                 row = i if i < col_size else i - col_size
-                tx = sx - 15 if col == 0 else sx + 15
-                ty = sy - block_h / 2 + row * (line_h + name_h + spacing)
-                if show_degrees:
-                    deg_str = f"{int(round(deg)):02d}"
-                    dbbox = draw.textbbox((0, 0), deg_str, font=deg_font)
-                    draw.text((tx - (dbbox[2]-dbbox[0])/2, ty), deg_str, fill=COLOR_DEGREE, font=deg_font)
-                pbbox = draw.textbbox((0, 0), abbr, font=planet_font)
-                draw.text((tx - (pbbox[2]-pbbox[0])/2, ty + line_h), abbr, fill=COLOR_PLANET, font=planet_font)
+                tx = sx - inradius * 0.3 if col == 0 else sx + inradius * 0.3
+                ty = sy - block_h / 2 + row * (max_ph + spacing)
+                _draw_planet_row(tx, ty, abbr, deg)
         else:
-            block_h = len(planets) * (line_h + name_h + spacing)
+            max_ph = max(draw.textbbox((0, 0), a, font=p_font)[3] for a, _ in planets)
+            block_h = len(planets) * (max_ph + spacing)
             ty = sy - block_h / 2
             for abbr, deg in planets:
-                if show_degrees:
-                    deg_str = f"{int(round(deg)):02d}"
-                    dbbox = draw.textbbox((0, 0), deg_str, font=deg_font)
-                    draw.text((sx - (dbbox[2]-dbbox[0])/2, ty), deg_str, fill=COLOR_DEGREE, font=deg_font)
-                pbbox = draw.textbbox((0, 0), abbr, font=planet_font)
-                draw.text((sx - (pbbox[2]-pbbox[0])/2, ty + line_h), abbr, fill=COLOR_PLANET, font=planet_font)
-                ty += line_h + name_h + spacing
+                _draw_planet_row(sx, ty, abbr, deg)
+                ty += max_ph + spacing
 
     buf = io.BytesIO()
     img.save(buf, format="PNG")
@@ -487,27 +530,21 @@ def generate_bhava_chart(bhava_data, title="Bhava / Chalit Chart", size=600,
 
 def _bhava_south(cells, title="Bhava / Chalit Chart", size=600, label_mode="house", language="en"):
     """South Indian fixed-sign grid for the bhava chart."""
-    margin = 40
-    title_height = 50
+    margin = 0
     img_w = size
-    img_h = size + title_height
+    img_h = size
     cell_w = (size - 2 * margin) // 4
     cell_h = (size - 2 * margin) // 4
 
-    img = Image.new("RGB", (img_w, img_h), "white")
+    img = Image.new("RGBA", (img_w, img_h), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
 
     _font = _try_load_devanagari_font if language == "hi" else _try_load_font
-    title_font  = _font(22)
     sign_font   = _font(14)
     house_font  = _font(17)
     planet_font = _font(14)
 
-    bbox = draw.textbbox((0, 0), title, font=title_font)
-    tw = bbox[2] - bbox[0]
-    draw.text(((img_w - tw) // 2, 10), title, fill="black", font=title_font)
-
-    ox, oy = margin, margin + title_height
+    ox, oy = margin, margin
     for r in range(5):
         y = oy + r * cell_h
         draw.line([(ox, y), (ox + 4 * cell_w, y)], fill="black", width=2)
@@ -544,7 +581,7 @@ def _bhava_south(cells, title="Bhava / Chalit Chart", size=600, label_mode="hous
         py = y + 20
         for p_abbr in cell["planets"]:
             draw.text((x + 3, py), p_abbr, fill="darkblue", font=planet_font)
-            py += 14
+            py += 18
 
     buf = io.BytesIO()
     img.save(buf, format="PNG")
@@ -560,27 +597,21 @@ def _bhava_north(cells, houses_list, title="Bhava / Chalit Chart", size=600,
     The Bhava-1 house determines which sign goes in region H1; subsequent signs follow
     clockwise — identical rotation logic to the rasi North Indian renderer.
     """
-    margin = 40
-    title_height = 50
+    margin = 0
     S = size - 2 * margin
     img_w = size
-    img_h = size + title_height
+    img_h = size
 
-    img = Image.new("RGB", (img_w, img_h), "white")
+    img = Image.new("RGBA", (img_w, img_h), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
 
     _font = _try_load_devanagari_font if language == "hi" else _try_load_font
-    title_font  = _font(22)
     sign_font   = _font(14)
     house_font  = _font(14)
     planet_font = _font(14)
 
-    bbox = draw.textbbox((0, 0), title, font=title_font)
-    tw = bbox[2] - bbox[0]
-    draw.text(((img_w - tw) // 2, 10), title, fill="black", font=title_font)
-
     ox = margin
-    oy = margin + title_height
+    oy = margin
 
     def pt(rx, ry):
         return (ox + int(rx * S), oy + int(ry * S))
@@ -705,13 +736,14 @@ def _bhava_north(cells, houses_list, title="Bhava / Chalit Chart", size=600,
         # Layout calculations
         planet_lines = [l for l in lines if l[0] == "planet"]
         other_lines = [l for l in lines if l[0] != "planet"]
+        _lh = 18  # line height — extra room for Devanagari matras
         planet_rows = (len(planet_lines) + 1) // 2 if len(planet_lines) > 4 else len(planet_lines)
-        total_h = (len(other_lines) + planet_rows) * 14
-        
+        total_h = (len(other_lines) + planet_rows) * _lh
+
         shift_factor = 0.18
         inner_x = cx_c + (outer[0] - cx_c) * shift_factor
         inner_y = cy_c + (outer[1] - cy_c) * shift_factor
-        
+
         current_y = inner_y - total_h / 2
         color_map = {"sign": "darkred", "planet": "darkblue"}
         font_map  = {"sign": sign_font,  "planet": planet_font}
@@ -720,7 +752,7 @@ def _bhava_north(cells, houses_list, title="Bhava / Chalit Chart", size=600,
             f = font_map[kind]
             bb = draw.textbbox((0, 0), text, font=f)
             draw.text((inner_x - (bb[2]-bb[0])/2, current_y), text, fill=color_map[kind], font=f)
-            current_y += 14
+            current_y += _lh
 
         if len(planet_lines) > 4:
             col_size = (len(planet_lines) + 1) // 2
@@ -729,7 +761,7 @@ def _bhava_north(cells, houses_list, title="Bhava / Chalit Chart", size=600,
                 col = 0 if i < col_size else 1
                 row = i if i < col_size else i - col_size
                 tx = inner_x - 16 if col == 0 else inner_x + 16
-                ty = current_y + row * 14
+                ty = current_y + row * _lh
                 bb = draw.textbbox((0, 0), p_text, font=planet_font)
                 draw.text((tx - (bb[2]-bb[0])/2, ty), p_text, fill=color_map["planet"], font=planet_font)
         else:
@@ -737,7 +769,7 @@ def _bhava_north(cells, houses_list, title="Bhava / Chalit Chart", size=600,
                 f = font_map[kind]
                 bb = draw.textbbox((0, 0), text, font=f)
                 draw.text((inner_x - (bb[2]-bb[0])/2, current_y), text, fill=color_map[kind], font=f)
-                current_y += 14
+                current_y += _lh
 
     buf = io.BytesIO()
     img.save(buf, format="PNG")

@@ -34,8 +34,20 @@ try:
 except ImportError:  # pragma: no cover
     CORS = None
 
+try:
+    from flask_compress import Compress as _Compress
+except ImportError:  # pragma: no cover
+    _Compress = None
+
 
 app = Flask(__name__)
+app.config["COMPRESS_MIMETYPES"] = [
+    "application/json", "text/plain", "text/html",
+]
+app.config["COMPRESS_LEVEL"] = 6
+app.config["COMPRESS_MIN_SIZE"] = 1000
+if _Compress is not None:
+    _Compress(app)
 app_logger = logger_mod.getLoggerForApp()
 
 SERVICE_VERSION = "1.0.0"
@@ -275,6 +287,11 @@ def jhora_shad_bala(**p): return pyjhora_helper.get_shad_bala(**p)
 @endpoint()
 def jhora_bhava_bala(**p): return pyjhora_helper.get_bhava_bala(**p)
 
+
+
+@app.route("/jhora/kundali-summary", methods=["POST"])
+@endpoint()
+def jhora_kundali_summary(**p): return pyjhora_helper.get_kundali_summary(**p)
 
 
 @app.route("/jhora/retrograde-combustion", methods=["POST"])
