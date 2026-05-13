@@ -82,10 +82,23 @@ SIGN_NAMES_SHORT_HI = [
 
 def _try_load_font(size):
     font_paths = [
+        # macOS
         "/System/Library/Fonts/Helvetica.ttc",
         "/System/Library/Fonts/SFNSMono.ttf",
+        "/Library/Fonts/Arial.ttf",
+        # Linux — DejaVu (most distros)
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
         "/usr/share/fonts/TTF/DejaVuSans.ttf",
+        "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+        # Linux — Liberation / FreeSans (common Docker images)
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/liberation/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+        "/usr/share/fonts/freefont/FreeSans.ttf",
+        # Linux — Noto (Ubuntu/Debian)
+        "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
+        "/usr/share/fonts/noto/NotoSans-Regular.ttf",
+        "/usr/share/fonts/opentype/noto/NotoSans-Regular.ttf",
     ]
     for path in font_paths:
         try:
