@@ -459,9 +459,11 @@ def get_gochar(**params):
 
 
 def get_kundali_summary(**params):
-    """Return rasi chart, navamsha (D9), retrograde, and combustion in one call."""
+    """Return rasi chart, navamsha (D9), retrograde, combustion, chalit, ashtavarga, shadbala, gochar, and dasha (MD/AD/PD) in one call."""
+    import datetime
     from jhora.horoscope.chart import charts as _charts
     from jhora.panchanga import drik as _drik
+    from helpers import advanced_helper as _adv
 
     place, dob, tob, jd = _build_inputs(**params)
     rc = _charts.rasi_chart(jd, place)
@@ -474,11 +476,69 @@ def get_kundali_summary(**params):
     planet_positions = _charts.divisional_chart(jd, place)
     combust_indices = _charts.planets_in_combustion(planet_positions)
 
+    # --- Chalit ---
+    chalit_data = get_chalit_table(**params)
+
+    # --- Ashtavarga ---
+    ashtavarga_data = _adv.get_ashtakavarga(**params)
+
+    # --- Shadbala ---
+    shadbala_data = get_shad_bala(**params)
+
+    # --- Gochar (today's date at same location) ---
+    today = datetime.date.today()
+    gochar_params = dict(params)
+    gochar_params["transit_year"] = today.year
+    gochar_params["transit_month"] = today.month
+    gochar_params["transit_day"] = today.day
+    gochar_params["transit_hour"] = 12
+    gochar_params["transit_minute"] = 0
+    gochar_params["transit_timezone_offset"] = params.get("timezone_offset", 5.5)
+    try:
+        gochar_data = get_gochar(**gochar_params)
+    except Exception as e:
+        gochar_data = {"error": str(e)}
+
+    # --- Dasha — 3 levels only (MD / AD / PD) ---
+    full_dasha = _compute_vimshottari_dasha(jd, place)
+    dasha_3level = {"meta": full_dasha.get("meta", {}), "mahadasha": []}
+    for md in full_dasha.get("mahadasha", []):
+        md_entry = {
+            "planet": md["planet"],
+            "planet_hi": md.get("planet_hi"),
+            "start_date": md["start_date"],
+            "end_date": md["end_date"],
+            "antardasha": [],
+        }
+        for ad in md.get("antardasha", []):
+            ad_entry = {
+                "planet": ad["planet"],
+                "planet_hi": ad.get("planet_hi"),
+                "start_date": ad["start_date"],
+                "end_date": ad["end_date"],
+                "pratyantar_dasha": [
+                    {
+                        "planet": pd["planet"],
+                        "planet_hi": pd.get("planet_hi"),
+                        "start_date": pd["start_date"],
+                        "end_date": pd["end_date"],
+                    }
+                    for pd in ad.get("pratyantar_dasha", [])
+                ],
+            }
+            md_entry["antardasha"].append(ad_entry)
+        dasha_3level["mahadasha"].append(md_entry)
+
     return {
         "rasi_chart": rasi,
         "navamsha_chart": navamsha,
         "retrograde": [_planet_label(p) for p in retro_indices],
         "combustion": [_planet_label(p) for p in combust_indices],
+        "chalit": chalit_data,
+        "ashtavarga": ashtavarga_data,
+        "shadbala": shadbala_data,
+        "gochar": gochar_data,
+        "dasha": dasha_3level,
     }
 
 
