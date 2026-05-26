@@ -150,7 +150,9 @@ def _sign_short(sign_idx, language="en"):
 
 
 def _group_planets_by_sign(chart_data, label_mode="degrees", language="en"):
-    """Group planet labels by 0-based sign index."""
+    """Group planet data by 0-based sign index.
+    Returns dict of sign_idx -> list of (label_str, is_retro, is_combust).
+    """
     houses = {}
     for entry in chart_data:
         sign_num_1based = int(entry["sign_number"])
@@ -166,8 +168,19 @@ def _group_planets_by_sign(chart_data, label_mode="degrees", language="en"):
             label = abbr
         else:
             label = f"{abbr} {deg:.0f}\u00b0"
-        houses.setdefault(sign_idx, []).append(label)
+        is_retro = bool(entry.get("is_retrograde"))
+        is_combust = bool(entry.get("is_combust"))
+        houses.setdefault(sign_idx, []).append((label, is_retro, is_combust))
     return houses
+
+
+def _draw_badge(draw, x, y, letter, bg_color, text_color, font):
+    """Draw a small filled circle badge with a letter centered inside."""
+    bbox = draw.textbbox((0, 0), letter, font=font)
+    tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    r = max(tw, th) // 2 + 3
+    draw.ellipse([x - r, y - r, x + r, y + r], fill=bg_color)
+    draw.text((x - tw // 2, y - th // 2), letter, fill=text_color, font=font)
 
 
 # ---------------------------------------------------------------------------
@@ -204,6 +217,7 @@ def generate_south_indian_chart(chart_data, title="Rasi Chart", size=600,
     draw.line([(cx2, cy1), (cx1, cy2)], fill="black", width=1)
 
     houses = _group_planets_by_sign(chart_data, label_mode=label_mode, language=language)
+    badge_font = _font(max(6, 10))
 
     for sign_idx in range(12):
         row, col = SOUTH_INDIAN_POSITIONS[sign_idx]
@@ -214,8 +228,16 @@ def generate_south_indian_chart(chart_data, title="Rasi Chart", size=600,
 
         planets = houses.get(sign_idx, [])
         py = y + 20
-        for p_label in planets:
+        for p_label, is_retro, is_combust in planets:
             draw.text((x + 3, py), p_label, fill="darkblue", font=planet_font)
+            pbbox = draw.textbbox((0, 0), p_label, font=planet_font)
+            bx = x + 3 + pbbox[2] + 4
+            by = py + (pbbox[3] - pbbox[1]) // 2
+            if is_retro:
+                _draw_badge(draw, bx, by, "R", (220, 100, 0), (255, 255, 255), badge_font)
+                bx += 14
+            if is_combust:
+                _draw_badge(draw, bx, by, "C", (180, 0, 0), (255, 255, 255), badge_font)
             py += 20
 
     buf = io.BytesIO()
@@ -369,7 +391,7 @@ def generate_north_indian_chart(chart_data, title="Rasi Chart", size=600,
                 start_sign = int(entry["sign_number"])
                 break
 
-    # Group planets by House (1-12)
+    # Group planets by House (1-12); tuples: (abbr, deg, is_retro, is_combust)
     house_planets = {h: [] for h in range(1, 13)}
     for entry in chart_data:
         sign_num = int(entry["sign_number"])
@@ -377,14 +399,16 @@ def generate_north_indian_chart(chart_data, title="Rasi Chart", size=600,
 
         p_name = entry.get("planet", "")
         p_id = str(entry.get("planet_id", ""))
+        is_retro = bool(entry.get("is_retrograde"))
+        is_combust = bool(entry.get("is_combust"))
         if p_name.lower() == ref_name.lower() or p_id.lower() == ref_name[0].lower():
             abbr = _planet_abbr("Lagna" if ref_name == "Lagna" else ref_name, language)
             deg = float(entry.get("degrees", 0))
-            house_planets[h].insert(0, (abbr, deg))
+            house_planets[h].insert(0, (abbr, deg, is_retro, is_combust))
         else:
             abbr = _planet_abbr(p_name, language)
             deg  = float(entry.get("degrees", 0))
-            house_planets[h].append((abbr, deg))
+            house_planets[h].append((abbr, deg, is_retro, is_combust))
 
     # Sign number to display in each cell corner (sign that occupies each house)
     house_sign_num = {h: (start_sign - 1 + h - 1) % 12 + 1 for h in range(1, 13)}
@@ -436,8 +460,8 @@ def generate_north_indian_chart(chart_data, title="Rasi Chart", size=600,
             mid = (lo + hi) // 2
             pf = _font(mid)
             # measure tallest planet label
-            max_pw = max(draw.textbbox((0, 0), a, font=pf)[2] for a, _ in planets)
-            max_ph = max(draw.textbbox((0, 0), a, font=pf)[3] for a, _ in planets)
+            max_pw = max(draw.textbbox((0, 0), a, font=pf)[2] for a, _, _r, _c in planets)
+            max_ph = max(draw.textbbox((0, 0), a, font=pf)[3] for a, _, _r, _c in planets)
             spacing = max(2, mid // 4)
             block_h = rows * (max_ph + spacing)
             block_w = col_count * (max_pw + (mid // 2 if show_degrees else 0) + 4)
@@ -449,35 +473,47 @@ def generate_north_indian_chart(chart_data, title="Rasi Chart", size=600,
 
         p_font = _font(planet_pt)
         d_font = _font(max(6, planet_pt // 2))
+        badge_pt = max(6, planet_pt // 2)
+        b_font = _font(badge_pt)
 
-        def _draw_planet_row(cx, ty, abbr, deg):
+        def _draw_planet_row(cx, ty, abbr, deg, is_retro, is_combust):
             pbbox = draw.textbbox((0, 0), abbr, font=p_font)
             pw, ph = pbbox[2] - pbbox[0], pbbox[3] - pbbox[1]
             x0 = cx - pw / 2
             draw.text((x0, ty), abbr, fill=COLOR_PLANET, font=p_font)
+            cursor_x = x0 + pw + 2
+            mid_y = int(ty + ph / 2)
             if show_degrees:
                 deg_str = f"{int(round(deg)):02d}"
                 dbbox = draw.textbbox((0, 0), deg_str, font=d_font)
+                dw = dbbox[2] - dbbox[0]
                 dh = dbbox[3] - dbbox[1]
-                draw.text((x0 + pw + 2, ty - dh // 2), deg_str, fill=COLOR_DEGREE, font=d_font)
+                draw.text((cursor_x, ty + ph // 2 - dh // 2), deg_str, fill=COLOR_DEGREE, font=d_font)
+                cursor_x += dw + 3
+            badge_r = badge_pt // 2 + 3
+            if is_retro:
+                _draw_badge(draw, int(cursor_x) + badge_r, mid_y, "R", (220, 100, 0), (255, 255, 255), b_font)
+                cursor_x += badge_r * 2 + 3
+            if is_combust:
+                _draw_badge(draw, int(cursor_x) + badge_r, mid_y, "C", (180, 0, 0), (255, 255, 255), b_font)
 
         spacing = max(2, planet_pt // 4)
         if use_two_cols:
             col_size = (len(planets) + 1) // 2
-            max_ph = max(draw.textbbox((0, 0), a, font=p_font)[3] for a, _ in planets)
+            max_ph = max(draw.textbbox((0, 0), a, font=p_font)[3] for a, _, _r, _c in planets)
             block_h = col_size * (max_ph + spacing)
-            for i, (abbr, deg) in enumerate(planets):
+            for i, (abbr, deg, is_retro, is_combust) in enumerate(planets):
                 col = 0 if i < col_size else 1
                 row = i if i < col_size else i - col_size
                 tx = sx - inradius * 0.3 if col == 0 else sx + inradius * 0.3
                 ty = sy - block_h / 2 + row * (max_ph + spacing)
-                _draw_planet_row(tx, ty, abbr, deg)
+                _draw_planet_row(tx, ty, abbr, deg, is_retro, is_combust)
         else:
-            max_ph = max(draw.textbbox((0, 0), a, font=p_font)[3] for a, _ in planets)
+            max_ph = max(draw.textbbox((0, 0), a, font=p_font)[3] for a, _, _r, _c in planets)
             block_h = len(planets) * (max_ph + spacing)
             ty = sy - block_h / 2
-            for abbr, deg in planets:
-                _draw_planet_row(sx, ty, abbr, deg)
+            for abbr, deg, is_retro, is_combust in planets:
+                _draw_planet_row(sx, ty, abbr, deg, is_retro, is_combust)
                 ty += max_ph + spacing
 
     buf = io.BytesIO()

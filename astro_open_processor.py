@@ -3,6 +3,7 @@
 # See LICENSE and NOTICE in the project root for full terms.
 
 
+
 import io
 import os
 import logging
@@ -435,7 +436,8 @@ def jhora_chart_image():
             data = pyjhora_helper.get_moon_data(**params)["planets"]
             title = "Moon Chart"
         elif chart_type == "D1_Rasi":
-            data = pyjhora_helper.get_rasi_chart(**params)
+            rasi_result = pyjhora_helper.get_rasi_chart(**params)
+            data = rasi_result["planets"]
             title = "Rasi Chart (D1)"
         else:
             all_charts = pyjhora_helper.get_divisional_charts(**params)
