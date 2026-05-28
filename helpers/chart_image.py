@@ -217,7 +217,7 @@ def generate_south_indian_chart(chart_data, title="Rasi Chart", size=600,
     draw.line([(cx2, cy1), (cx1, cy2)], fill="black", width=1)
 
     houses = _group_planets_by_sign(chart_data, label_mode=label_mode, language=language)
-    badge_font = _font(max(6, 10))
+    badge_font = _try_load_font(max(6, 10))
 
     for sign_idx in range(12):
         row, col = SOUTH_INDIAN_POSITIONS[sign_idx]
@@ -474,7 +474,7 @@ def generate_north_indian_chart(chart_data, title="Rasi Chart", size=600,
         p_font = _font(planet_pt)
         d_font = _font(max(6, planet_pt // 2))
         badge_pt = max(6, planet_pt // 2)
-        b_font = _font(badge_pt)
+        b_font = _try_load_font(badge_pt)
 
         def _draw_planet_row(cx, ty, abbr, deg, is_retro, is_combust):
             pbbox = draw.textbbox((0, 0), abbr, font=p_font)
