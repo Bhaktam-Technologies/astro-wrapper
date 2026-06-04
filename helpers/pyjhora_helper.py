@@ -360,24 +360,7 @@ def _duration_struct(start, end):
 def get_rasi_chart(**params):
     place, *_rest, jd = _build_inputs(**params)
     rc = charts.rasi_chart(jd, place)
-    planet_positions = charts.divisional_chart(jd, place)
-    retro_indices = drik.planets_in_retrograde(jd, place)
-    combust_indices = charts.planets_in_combustion(planet_positions)
-    retrograde_labels = [_planet_label(p) for p in retro_indices]
-    # Rahu (7) and Ketu (8) are always retrograde — nodes always move retrograde
-    for node in ("Rahu", "Ketu"):
-        if node not in retrograde_labels:
-            retrograde_labels.append(node)
-    combustion_labels = [_planet_label(p) for p in combust_indices]
-    data = _add_house_numbers([_format_planet_position(e) for e in rc])
-    for entry in data:
-        entry["is_retrograde"] = entry["planet"] in retrograde_labels
-        entry["is_combust"] = entry["planet"] in combustion_labels
-    return {
-        "planets": data,
-        "retrograde": retrograde_labels,
-        "combustion": combustion_labels,
-    }
+    return _add_house_numbers([_format_planet_position(e) for e in rc])
 
 
 def _add_house_numbers(data):
