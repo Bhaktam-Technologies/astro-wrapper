@@ -1,3 +1,9 @@
 #!/bin/sh
-ALLOW_PUBLIC_ACCESS=1 gunicorn --workers 3 --timeout 12000 -b :5002 wsgi:app --reload
+ALLOW_PUBLIC_ACCESS=1 gunicorn \
+  --workers 3 \
+  --max-requests 200 \
+  --max-requests-jitter 50 \
+  --timeout 120 \
+  --graceful-timeout 30 \
+  -b :5002 wsgi:app
 #  lsof -t -i :5002 | xargs kill -9
