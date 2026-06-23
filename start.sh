@@ -4,5 +4,7 @@ ALLOW_PUBLIC_ACCESS=1 gunicorn \
   --max-requests 200 \
   --max-requests-jitter 50 \
   --timeout 120 \
+  --worker-class gthread \
+  --threads 2 \
   -b :5002 wsgi:app
 #  lsof -t -i :5002 | xargs kill -9
